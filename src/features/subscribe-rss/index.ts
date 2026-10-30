@@ -11,3 +11,7 @@ export type {
   ParsedEpisodeItem,
   ParsedPodcastFeed,
 } from './parser';
+export {
+  persistParsedFeedInBatches,
+  subscribeOrRefreshPodcastFeed,
+} from './service';
