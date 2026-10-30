@@ -11,3 +11,10 @@ export type {
   DownloadManagerStoreState,
   EpisodeDownloadTaskInfo,
 } from './downloader';
+export {
+  calculateCacheUsageSummary,
+  enforceCacheStorageLimitLru,
+  getDownloadedOrActiveEpisodes,
+  unsubscribeAndDeletePodcastCascade,
+} from './cacheManager';
+export type { CacheUsageSummary } from './cacheManager';

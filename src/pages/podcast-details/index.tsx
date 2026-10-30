@@ -11,6 +11,14 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { subscribeOrRefreshPodcastFeed } from '@features/subscribe-rss';
 import {
+  deleteEpisodeDownloadedFiles,
+  enforceCacheStorageLimitLru,
+  pauseEpisodeDownload,
+  startOrResumeEpisodeDownload,
+  unsubscribeAndDeletePodcastCascade,
+  useDownloadManagerStore,
+} from '@features/download-episode';
+import {
   appendTrackToPlaybackQueue,
   PlayableTrack,
   startPlayableTrack,
@@ -58,6 +66,7 @@ export function mapEpisodeToPlayableTrack(
 
 export function PodcastDetailsPage({
   route,
+  navigation,
 }: PodcastDetailsPageProps): React.JSX.Element {
   const { podcastId, title } = route.params;
 
@@ -71,6 +80,7 @@ export function PodcastDetailsPage({
   const activeTrack = usePlayerStore((state) => state.activeTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const queue = usePlayerStore((state) => state.queue);
+  const downloadTasks = useDownloadManagerStore((state) => state.tasks);
 
   const loadInitialPage = useCallback(async () => {
     setIsLoadingInitial(true);
@@ -153,15 +163,56 @@ export function PodcastDetailsPage({
     [podcast?.title, queue, title],
   );
 
+  const handleDownloadAction = useCallback(
+    async (episode: EpisodeEntity) => {
+      const liveTask = downloadTasks[episode.id];
+      const currentStatus = liveTask ? liveTask.status : episode.downloadStatus;
+
+      if (currentStatus === 'downloading') {
+        await pauseEpisodeDownload(episode.id);
+        await loadInitialPage();
+        return;
+      }
+
+      if (currentStatus === 'completed') {
+        await deleteEpisodeDownloadedFiles(episode.id);
+        await loadInitialPage();
+        return;
+      }
+
+      await startOrResumeEpisodeDownload(episode.id, async () => {
+        await enforceCacheStorageLimitLru(undefined, episode.id);
+        await loadInitialPage();
+      });
+    },
+    [downloadTasks, loadInitialPage],
+  );
+
+  const handleUnsubscribe = useCallback(async () => {
+    await unsubscribeAndDeletePodcastCascade(podcastId);
+    navigation.goBack();
+  }, [navigation, podcastId]);
+
   return (
     <ScreenContainer>
       <View style={styles.summaryHeader}>
-        <Text style={styles.podcastTitle} numberOfLines={2}>
-          {podcast?.title ?? title}
-        </Text>
-        <Text style={styles.episodeCount}>
-          {totalCount} episodes • Showing {episodes.length}
-        </Text>
+        <View style={styles.summaryTopRow}>
+          <View style={styles.summaryTitleCol}>
+            <Text style={styles.podcastTitle} numberOfLines={2}>
+              {podcast?.title ?? title}
+            </Text>
+            <Text style={styles.episodeCount}>
+              {totalCount} episodes • Showing {episodes.length}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.unsubscribeBtn}
+            onPress={() => {
+              handleUnsubscribe().catch(() => {});
+            }}>
+            <Text style={styles.unsubscribeBtnText}>UNSUBSCRIBE</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -184,6 +235,20 @@ export function PodcastDetailsPage({
         renderItem={({ item }) => {
           const isCurrent = activeTrack?.id === item.id;
           const isQueued = queue.some((q) => q.id === item.id);
+          const liveTask = downloadTasks[item.id];
+          const status = liveTask ? liveTask.status : item.downloadStatus;
+          const progress = liveTask ? liveTask.progress : item.downloadProgress;
+
+          let downloadLabel = 'DOWNLOAD';
+          if (status === 'downloading') {
+            downloadLabel = `PAUSE ${Math.round(progress * 100)}%`;
+          } else if (status === 'paused') {
+            downloadLabel = `RESUME ${Math.round(progress * 100)}%`;
+          } else if (status === 'completed') {
+            downloadLabel = 'OFFLINE ✓';
+          } else if (status === 'failed') {
+            downloadLabel = 'RETRY DL';
+          }
 
           return (
             <View style={[styles.episodeCard, isCurrent && styles.episodeCardActive]}>
@@ -202,6 +267,23 @@ export function PodcastDetailsPage({
               </View>
 
               <View style={styles.episodeActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.downloadBtn,
+                    status === 'completed' && styles.downloadBtnDone,
+                  ]}
+                  onPress={() => {
+                    handleDownloadAction(item).catch(() => {});
+                  }}>
+                  <Text
+                    style={[
+                      styles.downloadBtnText,
+                      status === 'completed' && styles.downloadBtnTextDone,
+                    ]}>
+                    {downloadLabel}
+                  </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={[styles.queueBtn, isQueued && styles.queueBtnActive]}
                   onPress={() => handleAddToQueue(item)}>
@@ -245,6 +327,15 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.surface,
   },
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryTitleCol: {
+    flex: 1,
+  },
   podcastTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -254,6 +345,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  unsubscribeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(244, 63, 94, 0.16)',
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  unsubscribeBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.accent,
   },
   listContent: {
     padding: 16,
@@ -286,7 +390,27 @@ const styles = StyleSheet.create({
   episodeActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    flexWrap: 'wrap',
     gap: 8,
+  },
+  downloadBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 6,
+    backgroundColor: COLORS.surfaceElevated,
+  },
+  downloadBtnDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderWidth: 1,
+    borderColor: COLORS.success,
+  },
+  downloadBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  downloadBtnTextDone: {
+    color: COLORS.success,
   },
   queueBtn: {
     paddingHorizontal: 12,
