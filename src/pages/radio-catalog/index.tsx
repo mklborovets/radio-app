@@ -2,7 +2,11 @@ import React, { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { StationList } from '@widgets/station-list';
 import { StationFiltersBar, useStationFilterStore } from '@features/filter-stations';
-import { usePlayerStore } from '@entities/player';
+import {
+  startPlayableTrack,
+  togglePlaybackState,
+  usePlayerStore,
+} from '@entities/player';
 import { RadioStation } from '@entities/station';
 import { COLORS, ScreenContainer } from '@shared/ui';
 
@@ -15,17 +19,15 @@ export function RadioCatalogPage(): React.JSX.Element {
 
   const activeTrack = usePlayerStore((state) => state.activeTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
-  const setActiveTrack = usePlayerStore((state) => state.setActiveTrack);
-  const setIsPlaying = usePlayerStore((state) => state.setIsPlaying);
 
   const handleSelectStation = useCallback(
     (station: RadioStation) => {
       if (activeTrack?.id === station.stationUuid) {
-        setIsPlaying(!isPlaying);
+        togglePlaybackState().catch(() => {});
         return;
       }
 
-      setActiveTrack({
+      startPlayableTrack({
         id: station.stationUuid,
         title: station.name,
         subtitle: `${station.country || station.countryCode || 'Radio'} • ${station.codec}`,
@@ -33,10 +35,9 @@ export function RadioCatalogPage(): React.JSX.Element {
         streamOrFileUrl: station.streamUrl,
         sourceType: 'radio',
         duration: 0,
-      });
-      setIsPlaying(true);
+      }).catch(() => {});
     },
-    [activeTrack, isPlaying, setActiveTrack, setIsPlaying],
+    [activeTrack],
   );
 
   return (
