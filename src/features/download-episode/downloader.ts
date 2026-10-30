@@ -289,9 +289,7 @@ export async function startOrResumeEpisodeDownload(
       if (chunkBytes > 0) {
         try {
           await ReactNativeBlobUtil.fs.appendFile(partPath, chunkPath, 'uri');
-        } catch {
-          // Ignore partial merge error on abrupt abort
-        }
+        } catch {}
       }
       await unlinkIfExists(chunkPath);
     }

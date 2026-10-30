@@ -111,9 +111,7 @@ export async function unsubscribeAndDeletePodcastCascade(
     try {
       const podcastRecord = await podcastsCollection.find(podcastId);
       destroyOps.push(podcastRecord.prepareDestroyPermanently());
-    } catch {
-      // Podcast already removed
-    }
+    } catch {}
 
     if (destroyOps.length > 0) {
       await database.batch(...destroyOps);

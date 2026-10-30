@@ -12,6 +12,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 import com.nozbe.watermelondb.jsi.WatermelonDBJSIPackage
+import com.radiopodcastplayer.streamguard.StreamGuardPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -20,6 +21,7 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               add(WatermelonDBJSIPackage())
+              add(StreamGuardPackage())
             }
 
         override fun getJSMainModuleName(): String = "index"
