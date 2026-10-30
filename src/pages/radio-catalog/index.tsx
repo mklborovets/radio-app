@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { StationList } from '@widgets/station-list';
 import { StationFiltersBar, useStationFilterStore } from '@features/filter-stations';
+import { StreamRecoveryBanner } from '@features/stream-recovery';
 import {
   startPlayableTrack,
   togglePlaybackState,
@@ -45,6 +46,7 @@ export function RadioCatalogPage(): React.JSX.Element {
       <View style={styles.header}>
         <Text style={styles.title}>Radio Directory</Text>
       </View>
+      <StreamRecoveryBanner />
       <StationFiltersBar />
       <StationList
         stations={stations}

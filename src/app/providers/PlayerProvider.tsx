@@ -1,5 +1,6 @@
 import React, { PropsWithChildren, useEffect } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import { useStreamGuardCoordinator } from '@features/stream-recovery';
 import { ensureTrackPlayerInitialized, usePlayerStore } from '@entities/player';
 import {
   flushEpisodePlaybackProgress,
@@ -7,6 +8,8 @@ import {
 } from '@entities/episode';
 
 export function PlayerProvider({ children }: PropsWithChildren): React.JSX.Element {
+  useStreamGuardCoordinator();
+
   useEffect(() => {
     const initializeAndRestore = async (): Promise<void> => {
       await ensureTrackPlayerInitialized();

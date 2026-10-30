@@ -10,6 +10,7 @@ import {
 import { QueueSheet } from '@widgets/queue-sheet';
 import { PlaybackControlsPanel } from '@features/playback-controls';
 import { SleepTimerControl } from '@features/sleep-timer';
+import { StreamRecoveryBanner } from '@features/stream-recovery';
 import { seekToPositionSeconds, usePlayerStore } from '@entities/player';
 import { formatTime } from '@shared/lib/formatTime';
 import { COLORS } from '@shared/ui';
@@ -103,6 +104,12 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
           ) : (
             <View style={styles.liveBadge}>
               <Text style={styles.liveBadgeText}>LIVE BROADCAST</Text>
+            </View>
+          )}
+
+          {isRadio && (
+            <View style={styles.recoveryBannerBox}>
+              <StreamRecoveryBanner />
             </View>
           )}
 
@@ -254,6 +261,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.accent,
+  },
+  recoveryBannerBox: {
+    width: '100%',
+    marginTop: 14,
   },
   queueWrapper: {
     width: '100%',
