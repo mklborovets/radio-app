@@ -11,6 +11,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { subscribeOrRefreshPodcastFeed } from '@features/subscribe-rss';
 import {
+  appendTrackToPlaybackQueue,
   PlayableTrack,
   startPlayableTrack,
   togglePlaybackState,
@@ -70,7 +71,6 @@ export function PodcastDetailsPage({
   const activeTrack = usePlayerStore((state) => state.activeTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const queue = usePlayerStore((state) => state.queue);
-  const setQueue = usePlayerStore((state) => state.setQueue);
 
   const loadInitialPage = useCallback(async () => {
     setIsLoadingInitial(true);
@@ -148,9 +148,9 @@ export function PodcastDetailsPage({
         return;
       }
       const playable = mapEpisodeToPlayableTrack(episode, podcast?.title ?? title);
-      setQueue([...queue.filter((item) => item.sourceType !== 'radio'), playable]);
+      appendTrackToPlaybackQueue(playable).catch(() => {});
     },
-    [podcast?.title, queue, setQueue, title],
+    [podcast?.title, queue, title],
   );
 
   return (

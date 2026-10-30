@@ -9,9 +9,12 @@ export type {
   PlayerState,
 } from './store';
 export {
+  appendTrackToPlaybackQueue,
   changePlaybackSpeed,
   ensureTrackPlayerInitialized,
   mapPlayableTrackToNativeTrack,
+  removeTrackFromPlaybackQueue,
+  reorderPlaybackQueue,
   seekRelativeSeconds,
   seekToPositionSeconds,
   skipToNextInQueue,

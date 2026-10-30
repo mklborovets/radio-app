@@ -244,3 +244,84 @@ export async function skipToPreviousInQueue(): Promise<void> {
   store.setActiveTrack(previousTrack);
   store.setIsPlaying(true);
 }
+
+export async function appendTrackToPlaybackQueue(playable: PlayableTrack): Promise<void> {
+  await ensureTrackPlayerInitialized();
+  const store = usePlayerStore.getState();
+
+  if (store.queue.some((item) => item.id === playable.id)) {
+    return;
+  }
+
+  if (!store.activeTrack || store.activeTrack.sourceType === 'radio') {
+    await startPlayableTrack(playable, 0);
+    return;
+  }
+
+  const nextQueue = [...store.queue, playable];
+  store.setQueue(nextQueue);
+  await TrackPlayer.add(mapPlayableTrackToNativeTrack(playable));
+}
+
+export async function reorderPlaybackQueue(
+  fromIndex: number,
+  toIndex: number,
+): Promise<void> {
+  const store = usePlayerStore.getState();
+  const currentQueue = store.queue;
+  if (
+    fromIndex < 0 ||
+    fromIndex >= currentQueue.length ||
+    toIndex < 0 ||
+    toIndex >= currentQueue.length ||
+    fromIndex === toIndex
+  ) {
+    return;
+  }
+
+  const reordered = [...currentQueue];
+  const [movedItem] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, movedItem);
+  store.setQueue(reordered);
+
+  await ensureTrackPlayerInitialized();
+  try {
+    await TrackPlayer.move(fromIndex, toIndex);
+  } catch {
+    return;
+  }
+}
+
+export async function removeTrackFromPlaybackQueue(trackId: string): Promise<void> {
+  const store = usePlayerStore.getState();
+  const index = store.queue.findIndex((item) => item.id === trackId);
+  if (index < 0) {
+    return;
+  }
+
+  const isRemovingActive = store.activeTrack?.id === trackId;
+  const nextQueue = store.queue.filter((item) => item.id !== trackId);
+  store.setQueue(nextQueue);
+
+  await ensureTrackPlayerInitialized();
+
+  if (nextQueue.length === 0) {
+    await TrackPlayer.reset();
+    store.setActiveTrack(null);
+    store.setIsPlaying(false);
+    return;
+  }
+
+  if (isRemovingActive) {
+    const nextActiveIndex = Math.min(index, nextQueue.length - 1);
+    const nextActive = nextQueue[nextActiveIndex];
+    await startPlayableTrack(nextActive, 0);
+  } else {
+    try {
+      await TrackPlayer.remove(index);
+    } catch {
+      return;
+    }
+  }
+}
+
