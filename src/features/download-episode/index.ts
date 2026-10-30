@@ -1,6 +1,13 @@
-export interface EpisodeDownloadTaskInfo {
-  episodeId: string;
-  progress: number;
-  downloadedBytes: number;
-  totalBytes: number;
-}
+export {
+  deleteEpisodeDownloadedFiles,
+  ensureEpisodesCacheDirectory,
+  getEpisodeFilePaths,
+  getEpisodesCacheDirectoryPath,
+  pauseEpisodeDownload,
+  startOrResumeEpisodeDownload,
+  useDownloadManagerStore,
+} from './downloader';
+export type {
+  DownloadManagerStoreState,
+  EpisodeDownloadTaskInfo,
+} from './downloader';
