@@ -20,3 +20,4 @@ export type RootStackParamList = {
   PodcastDetails: { podcastId: string; title: string };
   PlayerModal: undefined;
 };
+

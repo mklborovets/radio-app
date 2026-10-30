@@ -58,3 +58,4 @@ export function createThrottle<TArgs extends unknown[]>(
 
   return throttled;
 }
+

@@ -32,3 +32,4 @@ export class EpisodeModel extends Model {
 
   @immutableRelation(TableName.Podcasts, 'podcast_id') podcast!: Relation<PodcastModel>;
 }
+

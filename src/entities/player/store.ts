@@ -62,3 +62,4 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setSleepTimerTargetTimestamp: (sleepTimerTargetTimestamp) =>
     set({ sleepTimerTargetTimestamp }),
 }));
+

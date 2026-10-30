@@ -16,3 +16,4 @@ export function PlayerModalPage({ navigation }: PlayerModalPageProps): React.JSX
     </ScreenContainer>
   );
 }
+

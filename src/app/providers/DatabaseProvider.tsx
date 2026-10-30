@@ -15,3 +15,4 @@ export function DatabaseProvider({ children }: PropsWithChildren): React.JSX.Ele
 export function useDatabase(): Database {
   return useContext(DatabaseContext);
 }
+

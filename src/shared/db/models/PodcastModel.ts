@@ -23,3 +23,4 @@ export class PodcastModel extends Model {
 
   @children(TableName.Episodes) episodes!: Query<EpisodeModel>;
 }
+

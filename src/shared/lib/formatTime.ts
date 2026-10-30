@@ -17,3 +17,4 @@ export function formatTime(totalSeconds: number): string {
 
   return `${paddedMinutes}:${paddedSeconds}`;
 }
+

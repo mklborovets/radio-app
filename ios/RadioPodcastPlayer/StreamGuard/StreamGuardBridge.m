@@ -20,3 +20,4 @@ RCT_EXTERN_METHOD(requestIgnoreBatteryOptimizations:(RCTPromiseResolveBlock)reso
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 @end
+

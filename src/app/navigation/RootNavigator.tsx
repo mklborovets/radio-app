@@ -54,3 +54,4 @@ export function RootNavigator(): React.JSX.Element {
     </NavigationContainer>
   );
 }
+

@@ -126,3 +126,4 @@ export async function getLastPlayedInProgressEpisode(): Promise<LastPlayedEpisod
     playbackPosition: episode.playbackPosition,
   };
 }
+

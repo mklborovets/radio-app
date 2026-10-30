@@ -1,79 +1,124 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Radio & Podcast Player (React Native + Native StreamGuard)
 
-# Getting Started
+Cross-platform mobile audio player for Android and iOS engineered with React Native CLI, strict TypeScript, Feature-Sliced Design (FSD), WatermelonDB JSI persistence, offline resumable downloads via HTTP Range headers, and a custom native `StreamGuard` module in Kotlin and Swift.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+---
 
-## Step 1: Start the Metro Server
+## 1. Architecture Overview (Feature-Sliced Design)
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+The JavaScript codebase strictly follows Feature-Sliced Design (FSD) unidirectional layer boundaries (`app -> pages -> widgets -> features -> entities -> shared`):
 
-To start Metro, run the following command from the _root_ of your React Native project:
-
-```bash
-# using npm
-npm start
-
-# OR using Yarn
-yarn start
+```text
+src/
+├── app/
+│   ├── index.tsx
+│   ├── navigation/          # RootNavigator, TabNavigator
+│   ├── providers/           # DatabaseProvider, PlayerProvider
+│   └── services/            # playbackService.ts (Headless JS task)
+├── pages/
+│   ├── radio-catalog/       # Live radio directory with filters & StreamGuard status
+│   ├── podcasts-feed/       # Podcast subscriptions & RSS feed addition
+│   ├── podcast-details/     # Paginated episodes list, offline download & queue actions
+│   ├── downloads/           # Offline cache dashboard, Range resume & LRU eviction
+│   └── player-modal/        # Full-screen modal player container
+├── widgets/
+│   ├── mini-player/         # Persistent bottom playback bar with progress indicator
+│   ├── full-player/         # Scrubbing, speed selector, sleep timer & queue sheet
+│   ├── queue-sheet/         # Drag-and-drop reorderable playback queue
+│   └── station-list/        # Virtualized list of radio stations
+├── features/
+│   ├── filter-stations/     # Debounced search, country & genre tag filters (Zustand)
+│   ├── subscribe-rss/       # Resilient XML parser, ETag/Last-Modified caching, batch DB writer
+│   ├── download-episode/    # Resumable HTTP Range downloader (.part files) & 2GB LRU cache manager
+│   ├── playback-controls/   # Transport controls & variable playback speed (0.5x - 2.0x)
+│   ├── sleep-timer/         # Scheduled playback pause timer
+│   └── stream-recovery/     # JS coordinator & status banner for native StreamGuard events
+├── entities/
+│   ├── station/             # Radio Browser API client, station domain model & card UI
+│   ├── podcast/             # Podcast domain model & WatermelonDB queries
+│   ├── episode/             # Episode domain model & 15s throttled playback position persistence
+│   └── player/              # Global player store & TrackPlayer controller
+└── shared/
+    ├── api/                 # Timeout-safe HTTP utilities
+    ├── config/              # Environment constants & navigation route types
+    ├── db/                  # WatermelonDB schema, migrations, models & JSI SQLite adapter
+    ├── lib/
+    │   ├── native/          # TypeScript bridge contract for StreamGuardModule
+    │   ├── throttle.ts      # Leading/trailing throttle utility with flush support
+    │   └── formatTime.ts    # Time formatting helper
+    └── ui/                  # Theme palette & base layout containers
 ```
 
-## Step 2: Start your Application
+### Core Subsystems
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+1. **Database Layer (`@shared/db`)**: Powered by WatermelonDB (`jsi: true`) over SQLite. Stores `podcasts`, `episodes`, and `stations_favorites`. Podcast feeds with 500+ episodes are ingested in chunked `database.batch(...)` transactions to keep the UI thread responsive.
+2. **Background Audio & Audio Focus (`@app/services/playbackService.ts`)**: Runs as a Headless JS service registered with `react-native-track-player`. Handles lock-screen controls (`RemotePlay`, `RemotePause`, `RemoteNext`, `RemotePrevious`, `RemoteJumpForward`, `RemoteJumpBackward`, `RemoteSeek`), audio focus interruptions (`RemoteDuck`), and `AUDIO_BECOMING_NOISY` (headphone disconnect).
+3. **Throttled Playback Position Persistence (`@entities/episode/persistence.ts`)**: Persists episode progress to SQLite every 15 seconds during active playback and flushes immediately on pause, stop, track switch, or when `AppState` transitions to `background`/`inactive`. Automatically restores the last in-progress episode on cold start.
+4. **Resumable Offline Downloader & LRU Cache (`@features/download-episode`)**: Downloads audio files into `<DocumentDir>/episodes_cache` (excluded from iCloud Backup on iOS via `excludeFromBackupKey`). Supports pause and resume from exact byte offsets using `.part` files and `Range: bytes=X-` headers (handling HTTP `206 Partial Content`). Enforces a 2 GB storage ceiling via Least Recently Used (LRU) eviction and cascades file deletion on podcast unsubscribe.
+5. **Native `StreamGuard` Module (`StreamGuardModule.kt` / `StreamGuardModule.swift`)**:
+   - **Android**: Uses `ConnectivityManager.NetworkCallback` and background `Dispatchers.IO` coroutines to monitor active live streams and network handoffs (`Wi-Fi <-> Cellular`).
+   - **iOS**: Uses `NWPathMonitor` on a background `DispatchQueue` and `RCTEventEmitter` to probe stream availability.
+   - **Exponential Backoff**: Executes `1s -> 2s -> 4s -> 8s -> 16s -> 30s (max)` retry cycles and emits `StreamGuardRecoveryStatus` events to JS to seamlessly restart live stream playback once connectivity returns.
 
-### For Android
+---
 
-```bash
-# using npm
-npm run android
+## 2. Local Build & Run Instructions
 
-# OR using Yarn
-yarn android
-```
+### Prerequisites
 
-### For iOS
+- **Node.js**: `>= 18`
+- **Android**: JDK 17, Android SDK (Platform 35, Build Tools 35.0.0, NDK 26.1.10909125), Android Emulator or physical device with USB debugging.
+- **iOS (macOS only)**: Xcode 15+, CocoaPods (`bundle exec pod install`).
 
-```bash
-# using npm
-npm run ios
+### Step-by-Step Setup
 
-# OR using Yarn
-yarn ios
-```
+1. **Install JavaScript dependencies**:
+   ```bash
+   npm install
+   ```
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+2. **Verify TypeScript compilation**:
+   ```bash
+   npx tsc --noEmit
+   ```
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
+3. **Run on Android**:
+   ```bash
+   npm run android
+   ```
 
-## Step 3: Modifying your App
+4. **Install Pods & Run on iOS**:
+   ```bash
+   cd ios && bundle exec pod install && cd ..
+   npm run ios
+   ```
 
-Now that you have successfully run the app, let's modify it.
+---
 
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
+## 3. OEM Battery Optimization & Background Execution Limitations
 
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+While standard Android (AOSP) respects Foreground Services with `foregroundServiceType="mediaPlayback"` and partial `WAKE_LOCK`s, several third-party Android OEMs ship proprietary user-space task killers that aggressively terminate background audio services and network sockets after the screen is locked.
 
-## Congratulations! :tada:
+To mitigate standard Doze mode restrictions, `StreamGuardModule` exposes `isIgnoringBatteryOptimizations()` and `requestIgnoreBatteryOptimizations()` (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`), which prompts the user to whitelist the app in Android's `PowerManager`. However, on aggressive OEM ROMs, users may need to configure additional vendor-specific settings:
 
-You've successfully run and modified your React Native App. :partying_face:
+### Xiaomi (MIUI / HyperOS)
+- **Mechanism**: Xiaomi's `PowerKeeper` daemon overrides standard Android Foreground Service priorities and kills background processes after 5–15 minutes of screen-off time, or severs background sockets when switching between Wi-Fi and Mobile Data.
+- **Required User Configuration**:
+  1. Open **Settings -> Apps -> Manage apps -> RadioPodcastPlayer**.
+  2. Enable **Autostart** (Background autostart).
+  3. Under **Battery saver**, select **No restrictions** (instead of "MIUI Battery Saver").
+  4. In the Recents (multitasking) tray, long-press the app card and tap the **Lock** icon to prevent memory sweeping.
 
-### Now what?
+### Huawei (EMUI / HarmonyOS)
+- **Mechanism**: Huawei replaces standard AOSP background management with the `HwPFW` (Huawei Power Firewall) and `SmartOptimizer` service, which terminates all non-whitelisted services—including active media playback services—immediately upon screen lock or high memory pressure.
+- **Required User Configuration**:
+  1. Open **Settings -> Battery -> App launch**.
+  2. Locate **RadioPodcastPlayer** and toggle off **Manage automatically**.
+  3. In the manual dialog, explicitly enable all three toggles: **Auto-launch**, **Secondary launch**, and **Run in background**.
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+### Samsung (OneUI)
+- **Mechanism**: Samsung's `Device Care` (`Freecess` / `MARs` daemon) places apps into "Sleeping" or "Deep sleeping" buckets and applies "Adaptive Battery" network throttling even when an audio session is paused briefly during an interruption.
+- **Required User Configuration**:
+  1. Open **Settings -> Apps -> RadioPodcastPlayer -> Battery**.
+  2. Select **Unrestricted** (default is "Optimized").
+  3. Ensure the app is not listed under **Settings -> Battery and device care -> Battery -> Background usage limits -> Sleeping apps / Deep sleeping apps**, and add it to **Never sleeping apps**.

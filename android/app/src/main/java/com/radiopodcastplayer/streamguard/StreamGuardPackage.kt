@@ -14,3 +14,4 @@ class StreamGuardPackage : ReactPackage {
         reactContext: ReactApplicationContext
     ): List<ViewManager<*, *>> = emptyList()
 }
+

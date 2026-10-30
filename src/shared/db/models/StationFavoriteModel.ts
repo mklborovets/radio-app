@@ -16,3 +16,4 @@ export class StationFavoriteModel extends Model {
   @text('codec') codec!: string;
   @field('added_at') addedAt!: number;
 }
+

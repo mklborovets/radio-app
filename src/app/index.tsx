@@ -17,3 +17,4 @@ export function AppRoot(): React.JSX.Element {
     </SafeAreaProvider>
   );
 }
+
