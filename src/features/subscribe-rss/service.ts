@@ -110,7 +110,7 @@ export async function persistParsedFeedInBatches(
 
 export async function subscribeOrRefreshPodcastFeed(
   feedUrl: string,
-): Promise<{ podcast: PodcastEntity; wasModified: boolean }> {
+): Promise<{ podcast: PodcastEntity; wasModified: boolean; isNewSubscription: boolean }> {
   const normalizedUrl = feedUrl.trim();
   const podcastsCollection = database.get<PodcastModel>(TableName.Podcasts);
   const existing = await podcastsCollection
@@ -118,6 +118,7 @@ export async function subscribeOrRefreshPodcastFeed(
     .fetch();
 
   const existingRecord = existing.length > 0 ? existing[0] : null;
+  const isNewSubscription = !existingRecord;
   const result = await fetchAndParseRssFeed(
     normalizedUrl,
     existingRecord?.etag,
@@ -128,6 +129,7 @@ export async function subscribeOrRefreshPodcastFeed(
     return {
       podcast: mapPodcastModelToEntity(existingRecord),
       wasModified: false,
+      isNewSubscription,
     };
   }
 
@@ -139,6 +141,7 @@ export async function subscribeOrRefreshPodcastFeed(
   return {
     podcast: savedPodcast,
     wasModified: true,
+    isNewSubscription,
   };
 }
 

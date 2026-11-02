@@ -41,7 +41,12 @@ export function StationCard({
   const [menuVisible, setMenuVisible] = useState(false);
 
   return (
-    <View style={[styles.card, isCurrentStation && styles.cardActive]}>
+    <View
+      style={[
+        styles.card,
+        station.isFavorite && styles.cardFavorite,
+        isCurrentStation && styles.cardActive,
+      ]}>
       <TouchableOpacity
         style={styles.mainTouchable}
         activeOpacity={0.85}
@@ -80,10 +85,19 @@ export function StationCard({
               ? 'active'
               : 'default'
           }
+          style={
+            station.isFavorite && !isCurrentStation
+              ? styles.favoritePlayBtn
+              : undefined
+          }
           onPress={() => onPressPlay(station)}
         />
 
-        <MoreOptionsButton onPress={() => setMenuVisible(true)} />
+        <MoreOptionsButton
+          onPress={() => setMenuVisible(true)}
+          style={station.isFavorite ? styles.favoriteMoreBtn : undefined}
+          textStyle={station.isFavorite ? styles.favoriteMoreBtnText : undefined}
+        />
       </View>
 
       <ActionMenuModal
@@ -118,6 +132,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  cardFavorite: {
+    borderColor: 'rgba(234, 179, 8, 0.4)',
+    backgroundColor: '#151d2a',
   },
   cardActive: {
     borderColor: COLORS.primary,
@@ -154,5 +172,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  favoritePlayBtn: {
+    backgroundColor: 'rgba(234, 179, 8, 0.16)',
+    borderColor: 'rgba(234, 179, 8, 0.5)',
+    borderWidth: 1,
+  },
+  favoriteMoreBtn: {
+    backgroundColor: 'rgba(234, 179, 8, 0.16)',
+    borderColor: 'rgba(234, 179, 8, 0.5)',
+    borderWidth: 1,
+  },
+  favoriteMoreBtnText: {
+    color: '#FACC15',
   },
 });

@@ -92,7 +92,12 @@ export function PodcastDetailsPage({
           />
         }
         renderItem={({ item }) => (
-          <View style={[styles.episodeCard, item.isCurrent && styles.episodeCardActive]}>
+          <View
+            style={[
+              styles.episodeCard,
+              item.isCompletedDownload && styles.episodeCardDownloaded,
+              item.isCurrent && styles.episodeCardActive,
+            ]}>
             <View style={styles.episodeCardRow}>
               <TouchableOpacity
                 style={styles.episodeInfo}
@@ -108,11 +113,26 @@ export function PodcastDetailsPage({
                 <PlayPauseButton
                   isPlaying={item.isCurrent && item.playLabel === 'PAUSE'}
                   variant={item.isCurrent ? 'active' : 'default'}
+                  style={
+                    item.isCompletedDownload && !item.isCurrent
+                      ? styles.downloadedPlayBtn
+                      : undefined
+                  }
                   onPress={() => onPlayEpisode(item.episode)}
                 />
 
                 <MoreOptionsButton
                   onPress={() => setActiveMenuEpisode(item)}
+                  style={
+                    item.isCompletedDownload
+                      ? styles.downloadedMoreBtn
+                      : undefined
+                  }
+                  textStyle={
+                    item.isCompletedDownload
+                      ? styles.downloadedMoreBtnText
+                      : undefined
+                  }
                 />
               </View>
             </View>
@@ -235,6 +255,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  episodeCardDownloaded: {
+    borderColor: 'rgba(34, 197, 94, 0.35)',
+    backgroundColor: '#12211e',
+  },
   episodeCardActive: {
     borderColor: COLORS.primary,
     backgroundColor: '#162338',
@@ -263,6 +287,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  downloadedPlayBtn: {
+    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    borderColor: 'rgba(34, 197, 94, 0.5)',
+    borderWidth: 1,
+  },
+  downloadedMoreBtn: {
+    backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    borderColor: 'rgba(34, 197, 94, 0.5)',
+    borderWidth: 1,
+  },
+  downloadedMoreBtnText: {
+    color: '#22C55E',
   },
   footerLoader: {
     paddingVertical: 16,

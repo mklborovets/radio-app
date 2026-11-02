@@ -56,6 +56,18 @@ export function usePodcastsFeedPage(): UsePodcastsFeedPageResult {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!statusMessage) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setStatusMessage(null);
+    }, 2000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [statusMessage]);
+
   const loadPodcastsFromDb = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -92,17 +104,31 @@ export function usePodcastsFeedPage(): UsePodcastsFeedPageResult {
         return;
       }
 
+      const normalizeUrl = (u: string) =>
+        u.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const alreadySubscribed = podcasts.find(
+        (p) => normalizeUrl(p.feedUrl) === normalizeUrl(urlToUse),
+      );
+
+      if (alreadySubscribed) {
+        setFeedUrlInput('');
+        setStatusMessage(`Already subscribed to "${alreadySubscribed.title}"`);
+        subscribeOrRefreshPodcastFeed(urlToUse).catch(() => {});
+        return;
+      }
+
       setIsSubscribing(true);
       setErrorMessage(null);
       setStatusMessage(null);
 
       try {
-        const { podcast, wasModified } = await subscribeOrRefreshPodcastFeed(urlToUse);
+        const { podcast, isNewSubscription } =
+          await subscribeOrRefreshPodcastFeed(urlToUse);
         setFeedUrlInput('');
         setStatusMessage(
-          wasModified
+          isNewSubscription
             ? `Subscribed to "${podcast.title}"`
-            : `"${podcast.title}" is already up to date (304 Not Modified)`,
+            : `Already subscribed to "${podcast.title}"`,
         );
         await loadPodcastsFromDb();
       } catch (error) {
@@ -113,7 +139,7 @@ export function usePodcastsFeedPage(): UsePodcastsFeedPageResult {
         setIsSubscribing(false);
       }
     },
-    [feedUrlInput, loadPodcastsFromDb],
+    [feedUrlInput, loadPodcastsFromDb, podcasts],
   );
 
   const onRefresh = useCallback(() => {

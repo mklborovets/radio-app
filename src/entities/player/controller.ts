@@ -749,3 +749,15 @@ export async function clearPlaybackQueue(): Promise<void> {
     }
   } catch {}
 }
+
+export async function getPlaybackVolume(): Promise<number> {
+  await ensureTrackPlayerInitialized();
+  return TrackPlayer.getVolume();
+}
+
+export async function setPlaybackVolume(volume: number): Promise<void> {
+  await ensureTrackPlayerInitialized();
+  const clamped = Math.max(0, Math.min(1, volume));
+  await TrackPlayer.setVolume(clamped);
+}
+
