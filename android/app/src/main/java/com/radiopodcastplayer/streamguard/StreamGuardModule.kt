@@ -117,19 +117,6 @@ class StreamGuardModule(
             reason = "monitoring_started"
         )
 
-        monitorJob = scope.launch {
-            while (isActive && monitoredStreamUrl.isNotEmpty()) {
-                delay(HEALTH_CHECK_INTERVAL_MS)
-                if (!isActive || monitoredStreamUrl.isEmpty()) {
-                    break
-                }
-                val isReachable = probeStreamEndpoint(monitoredStreamUrl)
-                if (!isReachable && reconnectJob?.isActive != true) {
-                    triggerExponentialBackoffRecovery("stream_probe_unreachable")
-                }
-            }
-        }
-
         promise.resolve(null)
     }
 
@@ -278,14 +265,13 @@ class StreamGuardModule(
                 readTimeout = PROBE_TIMEOUT_MS
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", "RadioPodcastPlayer/1.0")
-                setRequestProperty("Icy-MetaData", "0")
-                setRequestProperty("Range", "bytes=0-1")
+                setRequestProperty("Accept", "*/*")
             }
             connection.connect()
             val responseCode = connection.responseCode
             responseCode in 200..399
         } catch (error: Exception) {
-            false
+            error.message?.contains("ICY", ignoreCase = true) == true
         } finally {
             try {
                 connection?.inputStream?.close()

@@ -11,7 +11,6 @@ import TrackPlayer, {
 import { Q } from '@nozbe/watermelondb';
 import { database, TableName, EpisodeModel } from '@shared/db';
 import { fetchTextWithTimeout } from '@shared/api';
-import { ENV_CONFIG } from '@shared/config';
 import { sanitizeImageUrl } from '@shared/lib';
 import { flushEpisodePlaybackProgress } from '@entities/episode';
 import { RadioStation } from '@entities/station';
@@ -32,19 +31,6 @@ export function clearStreamWatchdog(): void {
     clearTimeout(streamWatchdogTimer);
     streamWatchdogTimer = null;
   }
-}
-
-function normalizeRadioStreamUrl(url: string): string {
-  const normalized = url.trim();
-  for (const rewrite of ENV_CONFIG.radioStreamRewrites) {
-    if (rewrite.matches.some((fragment) => normalized.includes(fragment))) {
-      return rewrite.target;
-    }
-  }
-  if (normalized.startsWith('http://online.') && normalized.includes('.ua/')) {
-    return normalized.replace('http://', 'https://');
-  }
-  return normalized;
 }
 
 function logPlayerError(context: string, error: unknown): void {
@@ -91,8 +77,7 @@ function episodeToPlayableTrack(
 }
 
 async function resolvePlaylistStreamUrl(rawUrl: string): Promise<string> {
-  const normalizedInput = normalizeRadioStreamUrl(rawUrl);
-  const trimmed = normalizedInput.trim();
+  const trimmed = rawUrl.trim();
   const lower = trimmed.toLowerCase();
   const isPls = lower.endsWith('.pls') || lower.includes('.pls?');
   const isM3u =

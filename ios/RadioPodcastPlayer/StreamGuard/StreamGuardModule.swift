@@ -72,7 +72,6 @@ class StreamGuardModule: RCTEventEmitter {
         reason: "monitoring_started"
       )
 
-      self.startHealthCheckTimer()
       resolve(nil)
     }
   }
@@ -282,8 +281,7 @@ class StreamGuardModule: RCTEventEmitter {
     request.httpMethod = "GET"
     request.timeoutInterval = 4.5
     request.setValue("RadioPodcastPlayer/1.0", forHTTPHeaderField: "User-Agent")
-    request.setValue("0", forHTTPHeaderField: "Icy-MetaData")
-    request.setValue("bytes=0-1", forHTTPHeaderField: "Range")
+    request.setValue("*/*", forHTTPHeaderField: "Accept")
 
     let task = URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
       guard let self = self else { return }
