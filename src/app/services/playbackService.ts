@@ -10,8 +10,11 @@ import TrackPlayer, {
   State,
 } from 'react-native-track-player';
 import {
+  claimTrackEnd,
   clearStreamWatchdog,
   handleTrackPlaybackFailure,
+  pausePlayback,
+  resumePlayback,
   seekRelativeSeconds,
   seekToPositionSeconds,
   skipToNextInQueue,
@@ -23,6 +26,20 @@ import {
   recordEpisodePlaybackProgressThrottled,
 } from '@entities/episode';
 
+let progressOwnerEpisodeId: string | null = null;
+
+function guarded<TEvent = void>(
+  handler: (event: TEvent) => Promise<void>,
+): (event: TEvent) => Promise<void> {
+  return async (event: TEvent) => {
+    try {
+      await handler(event);
+    } catch (error) {
+      console.warn('[playbackService]', error);
+    }
+  };
+}
+
 async function flushCurrentEpisodeIfApplicable(): Promise<void> {
   const store = usePlayerStore.getState();
   const active = store.activeTrack;
@@ -31,6 +48,9 @@ async function flushCurrentEpisodeIfApplicable(): Promise<void> {
   }
 
   const episodeId = active.episodeId ?? active.id;
+  if (progressOwnerEpisodeId !== episodeId) {
+    return;
+  }
   await flushEpisodePlaybackProgress(
     episodeId,
     store.positionSeconds,
@@ -44,6 +64,10 @@ async function handleTrackEnded(): Promise<void> {
   if (isTransitioningToNextTrack) {
     return;
   }
+  const endedTrack = usePlayerStore.getState().activeTrack;
+  if (endedTrack && !claimTrackEnd(endedTrack.id)) {
+    return;
+  }
   isTransitioningToNextTrack = true;
   clearStreamWatchdog();
   const store = usePlayerStore.getState();
@@ -53,70 +77,71 @@ async function handleTrackEnded(): Promise<void> {
     await flushCurrentEpisodeIfApplicable();
     await skipToNextInQueue();
   } finally {
-    setTimeout(() => {
-      isTransitioningToNextTrack = false;
-    }, 1000);
+    isTransitioningToNextTrack = false;
   }
 }
 
 export async function playbackService(): Promise<void> {
-  TrackPlayer.addEventListener(Event.RemotePlay, async () => {
-    await TrackPlayer.play();
-    usePlayerStore.getState().setIsPlaying(true);
-  });
+  TrackPlayer.addEventListener(
+    Event.RemotePlay,
+    guarded(async () => {
+      await resumePlayback();
+    }),
+  );
 
-  TrackPlayer.addEventListener(Event.RemotePause, async () => {
-    await TrackPlayer.pause();
-    usePlayerStore.getState().setIsPlaying(false);
-    await flushCurrentEpisodeIfApplicable();
-  });
+  TrackPlayer.addEventListener(
+    Event.RemotePause,
+    guarded(async () => {
+      await pausePlayback();
+      await flushCurrentEpisodeIfApplicable();
+    }),
+  );
 
-  TrackPlayer.addEventListener(Event.RemoteStop, async () => {
+  TrackPlayer.addEventListener(Event.RemoteStop, guarded(async () => {
     await flushCurrentEpisodeIfApplicable();
     await TrackPlayer.stop();
     usePlayerStore.getState().setIsPlaying(false);
-  });
+  }));
 
-  TrackPlayer.addEventListener(Event.RemoteNext, async () => {
+  TrackPlayer.addEventListener(Event.RemoteNext, guarded(async () => {
     await flushCurrentEpisodeIfApplicable();
     await skipToNextInQueue();
-  });
+  }));
 
-  TrackPlayer.addEventListener(Event.RemotePrevious, async () => {
+  TrackPlayer.addEventListener(Event.RemotePrevious, guarded(async () => {
     await flushCurrentEpisodeIfApplicable();
     await skipToPreviousInQueue();
-  });
+  }));
 
   TrackPlayer.addEventListener(
     Event.RemoteJumpForward,
-    async (event: RemoteJumpForwardEvent) => {
+    guarded(async (event: RemoteJumpForwardEvent) => {
       const interval = event.interval > 0 ? event.interval : 30;
       await seekRelativeSeconds(interval);
       await flushCurrentEpisodeIfApplicable();
-    },
+    }),
   );
 
   TrackPlayer.addEventListener(
     Event.RemoteJumpBackward,
-    async (event: RemoteJumpBackwardEvent) => {
+    guarded(async (event: RemoteJumpBackwardEvent) => {
       const interval = event.interval > 0 ? event.interval : 30;
       await seekRelativeSeconds(-interval);
       await flushCurrentEpisodeIfApplicable();
-    },
+    }),
   );
 
-  TrackPlayer.addEventListener(Event.RemoteSeek, async (event: RemoteSeekEvent) => {
+  TrackPlayer.addEventListener(Event.RemoteSeek, guarded(async (event: RemoteSeekEvent) => {
     await seekToPositionSeconds(event.position);
     await flushCurrentEpisodeIfApplicable();
-  });
+  }));
 
-  TrackPlayer.addEventListener(Event.RemoteDuck, async (event: RemoteDuckEvent) => {
+  TrackPlayer.addEventListener(Event.RemoteDuck, guarded(async (event: RemoteDuckEvent) => {
     const store = usePlayerStore.getState();
 
     if (event.permanent) {
       store.setWasPlayingBeforeInterruption(false);
-      await TrackPlayer.pause();
-      store.setIsPlaying(false);
+      await pausePlayback();
       await flushCurrentEpisodeIfApplicable();
       return;
     }
@@ -124,8 +149,7 @@ export async function playbackService(): Promise<void> {
     if (event.paused) {
       const wasCurrentlyPlaying = store.isPlaying;
       store.setWasPlayingBeforeInterruption(wasCurrentlyPlaying);
-      await TrackPlayer.pause();
-      store.setIsPlaying(false);
+      await pausePlayback();
       await flushCurrentEpisodeIfApplicable();
       return;
     }
@@ -133,14 +157,13 @@ export async function playbackService(): Promise<void> {
     await TrackPlayer.setVolume(1.0);
     if (store.wasPlayingBeforeInterruption) {
       store.setWasPlayingBeforeInterruption(false);
-      await TrackPlayer.play();
-      store.setIsPlaying(true);
+      await resumePlayback();
     }
-  });
+  }));
 
   TrackPlayer.addEventListener(
     Event.PlaybackState,
-    async (playbackState: PlaybackState) => {
+    guarded(async (playbackState: PlaybackState) => {
       const store = usePlayerStore.getState();
       if (playbackState.state === State.Error) {
         const errorMessage = playbackState.error?.message || 'playback error';
@@ -182,27 +205,31 @@ export async function playbackService(): Promise<void> {
           await flushCurrentEpisodeIfApplicable();
         }
       }
-    },
+    }),
   );
 
-  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
+  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, guarded(async () => {
     await handleTrackEnded();
-  });
+  }));
 
   TrackPlayer.addEventListener(
     Event.PlaybackError,
-    async (event: PlaybackErrorEvent) => {
+    guarded(async (event: PlaybackErrorEvent) => {
       await handleTrackPlaybackFailure(event.message || 'stream error');
-    },
+    }),
   );
 
   TrackPlayer.addEventListener(
     Event.PlaybackProgressUpdated,
-    async (event: PlaybackProgressUpdatedEvent) => {
+    guarded(async (event: PlaybackProgressUpdatedEvent) => {
       const store = usePlayerStore.getState();
       store.setProgress(event.position, event.duration);
 
       const active = store.activeTrack;
+      progressOwnerEpisodeId =
+        active && active.sourceType === 'episode'
+          ? (active.episodeId ?? active.id)
+          : null;
       if (active && active.sourceType === 'episode' && store.isPlaying) {
         const episodeId = active.episodeId ?? active.id;
         recordEpisodePlaybackProgressThrottled(
@@ -219,7 +246,7 @@ export async function playbackService(): Promise<void> {
           await handleTrackEnded();
         }
       }
-    },
+    }),
   );
 
   TrackPlayer.addEventListener(

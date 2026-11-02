@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import TrackPlayer from 'react-native-track-player';
-import { usePlayerStore } from '@entities/player';
+import { pausePlayback, usePlayerStore } from '@entities/player';
 import { formatTime } from '@shared/lib/formatTime';
 
 export type SleepTimerPresetMinutes = 1 | 5 | 10 | 25;
@@ -28,11 +27,9 @@ export function scheduleSleepTimer(minutes: SleepTimerPresetMinutes | null): voi
 
   activeTimeoutId = setTimeout(() => {
     activeTimeoutId = null;
-    TrackPlayer.pause()
+    pausePlayback()
       .then(() => {
-        const latestStore = usePlayerStore.getState();
-        latestStore.setIsPlaying(false);
-        latestStore.setSleepTimerTargetTimestamp(null);
+        usePlayerStore.getState().setSleepTimerTargetTimestamp(null);
       })
       .catch(() => {});
   }, durationMs);

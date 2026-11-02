@@ -53,8 +53,14 @@ export const useStreamRecoveryStore = create<StreamRecoveryStore>((set) => ({
 }));
 
 export function useStreamGuardCoordinator(): void {
-  const activeTrack = usePlayerStore((state) => state.activeTrack);
-  const isPlaying = usePlayerStore((state) => state.isPlaying);
+  const radioStreamUrl = usePlayerStore((state) =>
+    state.activeTrack?.sourceType === 'radio'
+      ? state.activeTrack.streamOrFileUrl
+      : null,
+  );
+  const shouldMonitor = usePlayerStore(
+    (state) => state.isPlaying || state.playbackError !== null,
+  );
 
   useEffect(() => {
     StreamGuardNative.isIgnoringBatteryOptimizations()
@@ -91,12 +97,12 @@ export function useStreamGuardCoordinator(): void {
   }, []);
 
   useEffect(() => {
-    if (activeTrack && activeTrack.sourceType === 'radio' && isPlaying) {
-      StreamGuardNative.startMonitoring(activeTrack.streamOrFileUrl).catch(() => {});
+    if (radioStreamUrl !== null && shouldMonitor) {
+      StreamGuardNative.startMonitoring(radioStreamUrl).catch(() => {});
     } else {
       StreamGuardNative.stopMonitoring().catch(() => {});
     }
-  }, [activeTrack, isPlaying]);
+  }, [radioStreamUrl, shouldMonitor]);
 }
 
 export interface UseStreamRecoveryBannerResult {

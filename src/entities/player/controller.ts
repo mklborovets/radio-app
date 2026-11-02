@@ -20,6 +20,7 @@ let isPlayerInitialized = false;
 let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 const triedFallbackTrackIds = new Set<string>();
 let playRequestCounter = 0;
+let lastEndedTrackId: string | null = null;
 let lastFailureHandledAt = 0;
 let lastFailureTrackId: string | null = null;
 const FAILURE_DEDUP_WINDOW_MS = 1500;
@@ -132,11 +133,22 @@ async function resolvePlaylistStreamUrl(rawUrl: string): Promise<string> {
   return trimmed;
 }
 
-export async function ensureTrackPlayerInitialized(): Promise<void> {
-  if (isPlayerInitialized) {
-    return;
-  }
+let playerInitPromise: Promise<void> | null = null;
 
+export function ensureTrackPlayerInitialized(): Promise<void> {
+  if (isPlayerInitialized) {
+    return Promise.resolve();
+  }
+  if (playerInitPromise === null) {
+    playerInitPromise = initializeTrackPlayer().catch((error) => {
+      playerInitPromise = null;
+      throw error;
+    });
+  }
+  return playerInitPromise;
+}
+
+async function initializeTrackPlayer(): Promise<void> {
   try {
     await TrackPlayer.setupPlayer({
       minBuffer: 2,
@@ -221,12 +233,23 @@ export async function fetchUpcomingPodcastEpisodes(
     const currentEpisode = await episodeCollection.find(currentEpisodeId).catch(() => null);
     const currentPublishedAt = currentEpisode?.publishedAt ?? Date.now();
 
+    const olderCondition = currentEpisode
+      ? Q.or(
+          Q.where('published_at', Q.lt(currentPublishedAt)),
+          Q.and(
+            Q.where('published_at', currentPublishedAt),
+            Q.where('id', Q.lt(currentEpisodeId)),
+          ),
+        )
+      : Q.where('published_at', Q.lte(currentPublishedAt));
+
     const upcomingEpisodes = await episodeCollection
       .query(
         Q.where('podcast_id', podcastId),
         Q.where('id', Q.notEq(currentEpisodeId)),
-        Q.where('published_at', Q.lte(currentPublishedAt)),
+        olderCondition,
         Q.sortBy('published_at', Q.desc),
+        Q.sortBy('id', Q.desc),
         Q.take(count + 2),
       )
       .fetch();
@@ -242,7 +265,7 @@ export async function fetchUpcomingPodcastEpisodes(
       artworkUrl: item.artworkUrl,
       streamOrFileUrl:
         item.localFilePath && item.downloadStatus === 'completed'
-          ? item.localFilePath
+          ? `file://${item.localFilePath}`
           : item.audioUrl,
       sourceType: 'episode',
       duration: item.duration,
@@ -352,6 +375,7 @@ export async function startPlayableTrack(
 ): Promise<void> {
   clearStreamWatchdog();
   playRequestCounter += 1;
+  lastEndedTrackId = null;
   const requestId = playRequestCounter;
   const isStale = (): boolean => requestId !== playRequestCounter;
   triedFallbackTrackIds.delete(playable.id);
@@ -520,6 +544,40 @@ export async function startPlayableTrack(
     const message = error instanceof Error ? error.message : 'stream load error';
     await handleTrackPlaybackFailure(message);
   }
+}
+
+export function claimTrackEnd(trackId: string): boolean {
+  if (lastEndedTrackId === trackId) {
+    return false;
+  }
+  lastEndedTrackId = trackId;
+  return true;
+}
+
+export async function pausePlayback(): Promise<void> {
+  clearStreamWatchdog();
+  await ensureTrackPlayerInitialized();
+  if (usePlayerStore.getState().activeTrack?.sourceType === 'radio') {
+    await TrackPlayer.stop();
+  } else {
+    await TrackPlayer.pause();
+  }
+  const store = usePlayerStore.getState();
+  store.setIsPlaying(false);
+  store.setIsBuffering(false);
+}
+
+export async function resumePlayback(): Promise<void> {
+  await ensureTrackPlayerInitialized();
+  const store = usePlayerStore.getState();
+  const active = store.activeTrack;
+  if (active?.sourceType === 'radio') {
+    await startPlayableTrack(active, 0);
+    return;
+  }
+  store.setPlaybackError(null);
+  await TrackPlayer.play();
+  store.setIsPlaying(true);
 }
 
 export async function togglePlaybackState(): Promise<void> {
@@ -693,8 +751,15 @@ export async function skipToPreviousInQueue(): Promise<void> {
             .query(
               Q.where('podcast_id', activeTrack.podcastId),
               Q.where('id', Q.notEq(episodeId)),
-              Q.where('published_at', Q.gte(currentEpisode.publishedAt)),
+              Q.or(
+                Q.where('published_at', Q.gt(currentEpisode.publishedAt)),
+                Q.and(
+                  Q.where('published_at', currentEpisode.publishedAt),
+                  Q.where('id', Q.gt(episodeId)),
+                ),
+              ),
               Q.sortBy('published_at', Q.asc),
+              Q.sortBy('id', Q.asc),
               Q.take(1),
             )
             .fetch();
@@ -708,7 +773,7 @@ export async function skipToPreviousInQueue(): Promise<void> {
               artworkUrl: prevEp.artworkUrl,
               streamOrFileUrl:
                 prevEp.localFilePath && prevEp.downloadStatus === 'completed'
-                  ? prevEp.localFilePath
+                  ? `file://${prevEp.localFilePath}`
                   : prevEp.audioUrl,
               sourceType: 'episode',
               duration: prevEp.duration,
