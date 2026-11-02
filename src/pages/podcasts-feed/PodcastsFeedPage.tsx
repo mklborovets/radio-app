@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,77 +10,24 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { subscribeOrRefreshPodcastFeed } from '@features/subscribe-rss';
-import { getSubscribedPodcasts, PodcastEntity } from '@entities/podcast';
-import { RootStackParamList } from '@shared/config';
 import { COLORS, ScreenContainer } from '@shared/ui';
-
-const SAMPLE_FEEDS: readonly { label: string; url: string }[] = [
-  {
-    label: 'Syntax.fm',
-    url: 'https://feed.syntax.fm/rss',
-  },
-  {
-    label: 'Changelog',
-    url: 'https://changelog.com/podcast/feed',
-  },
-];
+import { usePodcastsFeedPage } from './model';
 
 export function PodcastsFeedPage(): React.JSX.Element {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [feedUrlInput, setFeedUrlInput] = useState('');
-  const [podcasts, setPodcasts] = useState<PodcastEntity[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubscribing, setIsSubscribing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
-  const loadPodcastsFromDb = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const list = await getSubscribedPodcasts();
-      setPodcasts(list);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadPodcastsFromDb().catch(() => {});
-  }, [loadPodcastsFromDb]);
-
-  const handleSubscribe = useCallback(
-    async (targetUrl?: string) => {
-      const urlToUse = (targetUrl ?? feedUrlInput).trim();
-      if (!urlToUse) {
-        return;
-      }
-
-      setIsSubscribing(true);
-      setErrorMessage(null);
-      setStatusMessage(null);
-
-      try {
-        const { podcast, wasModified } = await subscribeOrRefreshPodcastFeed(urlToUse);
-        setFeedUrlInput('');
-        setStatusMessage(
-          wasModified
-            ? `Subscribed to "${podcast.title}"`
-            : `"${podcast.title}" is already up to date (304 Not Modified)`,
-        );
-        await loadPodcastsFromDb();
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Failed to subscribe to RSS feed';
-        setErrorMessage(message);
-      } finally {
-        setIsSubscribing(false);
-      }
-    },
-    [feedUrlInput, loadPodcastsFromDb],
-  );
+  const {
+    feedUrlInput,
+    podcastItems,
+    sampleFeeds,
+    isLoading,
+    isSubscribing,
+    errorMessage,
+    statusMessage,
+    onChangeFeedUrlInput,
+    onRefresh,
+    onPressSubscribeInput,
+    onPressPreset,
+    onPressPodcast,
+  } = usePodcastsFeedPage();
 
   return (
     <ScreenContainer>
@@ -90,7 +37,7 @@ export function PodcastsFeedPage(): React.JSX.Element {
           <TextInput
             style={styles.urlInput}
             value={feedUrlInput}
-            onChangeText={setFeedUrlInput}
+            onChangeText={onChangeFeedUrlInput}
             placeholder="Paste RSS feed URL (https://...)"
             placeholderTextColor={COLORS.textMuted}
             autoCapitalize="none"
@@ -99,9 +46,7 @@ export function PodcastsFeedPage(): React.JSX.Element {
           <TouchableOpacity
             style={styles.addButton}
             disabled={isSubscribing}
-            onPress={() => {
-              handleSubscribe().catch(() => {});
-            }}>
+            onPress={onPressSubscribeInput}>
             {isSubscribing ? (
               <ActivityIndicator size="small" color={COLORS.background} />
             ) : (
@@ -111,14 +56,12 @@ export function PodcastsFeedPage(): React.JSX.Element {
         </View>
 
         <View style={styles.presetsRow}>
-          {SAMPLE_FEEDS.map((sample) => (
+          {sampleFeeds.map((sample) => (
             <TouchableOpacity
               key={sample.url}
               style={styles.presetChip}
               disabled={isSubscribing}
-              onPress={() => {
-                handleSubscribe(sample.url).catch(() => {});
-              }}>
+              onPress={() => onPressPreset(sample.url)}>
               <Text style={styles.presetChipText}>+ {sample.label}</Text>
             </TouchableOpacity>
           ))}
@@ -129,15 +72,13 @@ export function PodcastsFeedPage(): React.JSX.Element {
       </View>
 
       <FlatList
-        data={podcasts}
-        keyExtractor={(item) => item.id}
+        data={podcastItems}
+        keyExtractor={(item) => item.podcast.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
             refreshing={isLoading}
-            onRefresh={() => {
-              loadPodcastsFromDb().catch(() => {});
-            }}
+            onRefresh={onRefresh}
             tintColor={COLORS.primary}
           />
         }
@@ -145,36 +86,34 @@ export function PodcastsFeedPage(): React.JSX.Element {
           <TouchableOpacity
             style={styles.podcastCard}
             activeOpacity={0.85}
-            onPress={() =>
-              navigation.navigate('PodcastDetails', {
-                podcastId: item.id,
-                title: item.title,
-              })
-            }>
+            onPress={() => onPressPodcast(item.podcast)}>
             <View style={styles.artworkBox}>
-              {item.artworkUrl ? (
+              {Boolean(item.podcast.artworkUrl) &&
+              item.podcast.artworkUrl !== 'null' &&
+              item.podcast.artworkUrl !== 'undefined' &&
+              (item.podcast.artworkUrl.startsWith('http://') ||
+                item.podcast.artworkUrl.startsWith('https://') ||
+                item.podcast.artworkUrl.startsWith('file://')) ? (
                 <Image
-                  source={{ uri: item.artworkUrl }}
+                  source={{ uri: item.podcast.artworkUrl }}
                   style={styles.artworkImage}
                   resizeMode="cover"
                 />
               ) : (
                 <View style={styles.artworkFallback}>
-                  <Text style={styles.artworkFallbackText}>
-                    {item.title.slice(0, 2).toUpperCase()}
-                  </Text>
+                  <Text style={styles.artworkFallbackText}>{item.initials}</Text>
                 </View>
               )}
             </View>
             <View style={styles.podcastInfo}>
               <Text style={styles.podcastTitle} numberOfLines={1}>
-                {item.title}
+                {item.podcast.title}
               </Text>
               <Text style={styles.podcastAuthor} numberOfLines={1}>
-                {item.author}
+                {item.podcast.author}
               </Text>
               <Text style={styles.podcastDescription} numberOfLines={2}>
-                {item.description}
+                {item.podcast.description}
               </Text>
             </View>
           </TouchableOpacity>
@@ -182,7 +121,8 @@ export function PodcastsFeedPage(): React.JSX.Element {
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Text style={styles.emptyText}>
-              No podcast subscriptions yet. Enter an RSS URL above to subscribe.
+              No podcast subscriptions yet. Enter an RSS URL above or tap a quick
+              preset to subscribe.
             </Text>
           </View>
         }
@@ -194,7 +134,7 @@ export function PodcastsFeedPage(): React.JSX.Element {
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 10,
     paddingBottom: 10,
   },
   title: {
@@ -211,7 +151,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
     color: COLORS.textPrimary,
     borderWidth: 1,
@@ -221,7 +161,7 @@ const styles = StyleSheet.create({
   addButton: {
     height: 44,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -238,8 +178,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   presetChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -268,7 +208,7 @@ const styles = StyleSheet.create({
   podcastCard: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
@@ -327,3 +267,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+

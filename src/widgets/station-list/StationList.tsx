@@ -9,29 +9,44 @@ import {
 } from 'react-native';
 import { RadioStation, StationCard } from '@entities/station';
 import { COLORS } from '@shared/ui';
+import { useStationList } from './model';
 
 export interface StationListProps {
   stations: RadioStation[];
   activeStationId?: string | null;
+  queuedStationIds?: ReadonlySet<string>;
   isPlaying?: boolean;
+  isBuffering?: boolean;
   isLoading?: boolean;
   errorMessage?: string | null;
   onRefresh?: () => void;
-  onSelectStation?: (station: RadioStation) => void;
-  onToggleFavorite?: (station: RadioStation) => void;
+  onSelectStation: (station: RadioStation) => void;
+  onToggleFavorite: (station: RadioStation) => void;
+  onAddToQueue: (station: RadioStation) => void;
 }
 
 export function StationList({
   stations,
   activeStationId = null,
+  queuedStationIds,
   isPlaying = false,
+  isBuffering = false,
   isLoading = false,
   errorMessage = null,
   onRefresh,
-  onSelectStation = () => {},
-  onToggleFavorite = () => {},
+  onSelectStation,
+  onToggleFavorite,
+  onAddToQueue,
 }: StationListProps): React.JSX.Element {
-  if (isLoading && stations.length === 0) {
+  const { viewState, items } = useStationList({
+    stations,
+    activeStationId,
+    queuedStationIds,
+    isLoading,
+    errorMessage,
+  });
+
+  if (viewState === 'loading') {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -40,7 +55,7 @@ export function StationList({
     );
   }
 
-  if (errorMessage && stations.length === 0) {
+  if (viewState === 'error') {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{errorMessage}</Text>
@@ -50,8 +65,8 @@ export function StationList({
 
   return (
     <FlatList
-      data={stations}
-      keyExtractor={(item) => item.stationUuid}
+      data={items}
+      keyExtractor={(item) => item.station.stationUuid}
       contentContainerStyle={styles.listContent}
       refreshControl={
         onRefresh ? (
@@ -64,11 +79,14 @@ export function StationList({
       }
       renderItem={({ item }) => (
         <StationCard
-          station={item}
-          isCurrentStation={activeStationId === item.stationUuid}
+          station={item.station}
+          isCurrentStation={item.isCurrentStation}
           isPlaying={isPlaying}
+          isBuffering={isBuffering}
+          isQueued={item.isQueued}
           onPressPlay={onSelectStation}
           onPressToggleFavorite={onToggleFavorite}
+          onPressAddToQueue={onAddToQueue}
         />
       )}
       ListEmptyComponent={
@@ -83,6 +101,7 @@ export function StationList({
 const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
+    paddingTop: 10,
     paddingBottom: 24,
     flexGrow: 1,
   },
@@ -104,3 +123,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+

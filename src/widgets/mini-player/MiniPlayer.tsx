@@ -1,12 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import {
-  seekRelativeSeconds,
-  togglePlaybackState,
-  usePlayerStore,
-} from '@entities/player';
-import { formatTime } from '@shared/lib/formatTime';
 import { COLORS } from '@shared/ui';
+import { useMiniPlayer } from './model';
 
 export interface MiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -15,28 +10,41 @@ export interface MiniPlayerProps {
 export function MiniPlayer({
   onOpenFullPlayer,
 }: MiniPlayerProps): React.JSX.Element | null {
-  const activeTrack = usePlayerStore((state) => state.activeTrack);
-  const isPlaying = usePlayerStore((state) => state.isPlaying);
-  const isBuffering = usePlayerStore((state) => state.isBuffering);
-  const positionSeconds = usePlayerStore((state) => state.positionSeconds);
-  const durationSeconds = usePlayerStore((state) => state.durationSeconds);
+  const {
+    activeTrack,
+    isRadio,
+    showProgressBar,
+    progressWidthPercent,
+    initials,
+    subtitleText,
+    playButtonLabel,
+    hasNextInQueue,
+    onSkipBackward,
+    onSkipNext,
+    onTogglePlay,
+  } = useMiniPlayer();
 
   if (!activeTrack) {
     return null;
   }
 
-  const isRadio = activeTrack.sourceType === 'radio';
-  const progressRatio =
-    !isRadio && durationSeconds > 0
-      ? Math.min(1, Math.max(0, positionSeconds / durationSeconds))
-      : 0;
+  const hasValidArtwork =
+    Boolean(activeTrack.artworkUrl) &&
+    activeTrack.artworkUrl !== 'null' &&
+    activeTrack.artworkUrl !== 'undefined' &&
+    (activeTrack.artworkUrl.startsWith('http://') ||
+      activeTrack.artworkUrl.startsWith('https://') ||
+      activeTrack.artworkUrl.startsWith('file://'));
 
   return (
     <View style={styles.wrapper}>
-      {!isRadio && durationSeconds > 0 && (
+      {showProgressBar && (
         <View style={styles.progressBarTrack}>
           <View
-            style={[styles.progressBarFill, { width: `${progressRatio * 100}%` }]}
+            style={[
+              styles.progressBarFill,
+              { width: `${progressWidthPercent}%` },
+            ]}
           />
         </View>
       )}
@@ -45,7 +53,7 @@ export function MiniPlayer({
         activeOpacity={0.9}
         onPress={onOpenFullPlayer}>
         <View style={styles.artworkBox}>
-          {activeTrack.artworkUrl ? (
+          {hasValidArtwork ? (
             <Image
               source={{ uri: activeTrack.artworkUrl }}
               style={styles.artworkImage}
@@ -53,9 +61,7 @@ export function MiniPlayer({
             />
           ) : (
             <View style={styles.artworkFallback}>
-              <Text style={styles.artworkFallbackText}>
-                {activeTrack.title.slice(0, 2).toUpperCase()}
-              </Text>
+              <Text style={styles.artworkFallbackText}>{initials}</Text>
             </View>
           )}
         </View>
@@ -65,9 +71,7 @@ export function MiniPlayer({
             {activeTrack.title}
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
-            {isRadio
-              ? `LIVE • ${activeTrack.subtitle}`
-              : `${formatTime(positionSeconds)} / ${formatTime(durationSeconds)}`}
+            {subtitleText}
           </Text>
         </View>
 
@@ -75,20 +79,26 @@ export function MiniPlayer({
           {!isRadio && (
             <TouchableOpacity
               style={styles.skipButton}
-              onPress={() => {
-                seekRelativeSeconds(-30).catch(() => {});
-              }}>
+              onPress={onSkipBackward}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
               <Text style={styles.skipButtonText}>-30</Text>
             </TouchableOpacity>
           )}
+
+          {hasNextInQueue && (
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={onSkipNext}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+              <Text style={styles.skipButtonText}>NEXT</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.playButton}
-            onPress={() => {
-              togglePlaybackState().catch(() => {});
-            }}>
-            <Text style={styles.playButtonText}>
-              {isBuffering ? '...' : isPlaying ? 'PAUSE' : 'PLAY'}
-            </Text>
+            onPress={onTogglePlay}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+            <Text style={styles.playButtonText}>{playButtonLabel}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -101,6 +111,32 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceElevated,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(244, 63, 94, 0.22)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.accent,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FDA4AF',
+    marginRight: 10,
+  },
+  errorCloseBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  errorCloseText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
   progressBarTrack: {
     height: 3,
@@ -119,9 +155,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   artworkBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
     marginRight: 12,
@@ -142,7 +178,7 @@ const styles = StyleSheet.create({
   },
   infoColumn: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 8,
   },
   title: {
     fontSize: 14,
@@ -150,7 +186,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
@@ -158,15 +194,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   skipButton: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   skipButtonText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
@@ -174,13 +215,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 64,
+    borderRadius: 8,
+    minWidth: 58,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   playButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.background,
   },
 });
+

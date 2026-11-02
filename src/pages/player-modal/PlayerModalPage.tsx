@@ -9,10 +9,12 @@ export type PlayerModalPageProps = NativeStackScreenProps<
   'PlayerModal'
 >;
 
-export function PlayerModalPage({ navigation }: PlayerModalPageProps): React.JSX.Element {
+export function PlayerModalPage({
+  navigation,
+}: PlayerModalPageProps): React.JSX.Element {
   return (
-    <ScreenContainer>
-      <FullPlayer onClose={() => navigation.goBack()} />
+    <ScreenContainer includeTopInset={false} includeBottomInset>
+      <FullPlayer onClose={navigation.goBack} />
     </ScreenContainer>
   );
 }

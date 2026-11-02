@@ -1,22 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react';
-import {
-  GestureResponderEvent,
-  PanResponder,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import {
-  PlayableTrack,
-  removeTrackFromPlaybackQueue,
-  reorderPlaybackQueue,
-  startPlayableTrack,
-  usePlayerStore,
-} from '@entities/player';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { PlayableTrack } from '@entities/player';
 import { COLORS } from '@shared/ui';
-
-const ROW_HEIGHT = 60;
+import { QUEUE_ROW_HEIGHT, useQueueRowDrag, useQueueSheet } from './model';
 
 interface QueueRowProps {
   track: PlayableTrack;
@@ -26,6 +12,8 @@ interface QueueRowProps {
   onSelect: (track: PlayableTrack) => void;
   onMove: (fromIndex: number, toIndex: number) => void;
   onRemove: (trackId: string) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
 function QueueRow({
@@ -36,60 +24,34 @@ function QueueRow({
   onSelect,
   onMove,
   onRemove,
+  onDragStart,
+  onDragEnd,
 }: QueueRowProps): React.JSX.Element {
-  const [dragOffsetY, setDragOffsetY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const startIndexRef = useRef(index);
-  startIndexRef.current = index;
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (
-          _evt: GestureResponderEvent,
-          gestureState,
-        ) => Math.abs(gestureState.dy) > 4,
-        onPanResponderGrant: () => {
-          setIsDragging(true);
-          setDragOffsetY(0);
-        },
-        onPanResponderMove: (_evt, gestureState) => {
-          setDragOffsetY(gestureState.dy);
-        },
-        onPanResponderRelease: (_evt, gestureState) => {
-          const indexShift = Math.round(gestureState.dy / ROW_HEIGHT);
-          const targetIndex = Math.max(
-            0,
-            Math.min(totalCount - 1, startIndexRef.current + indexShift),
-          );
-          setIsDragging(false);
-          setDragOffsetY(0);
-          if (targetIndex !== startIndexRef.current) {
-            onMove(startIndexRef.current, targetIndex);
-          }
-        },
-        onPanResponderTerminate: () => {
-          setIsDragging(false);
-          setDragOffsetY(0);
-        },
-      }),
-    [onMove, totalCount],
-  );
+  const {
+    dragOffsetY,
+    isDragging,
+    canMoveUp,
+    canMoveDown,
+    panHandlers,
+    onMoveUp,
+    onMoveDown,
+  } = useQueueRowDrag(index, totalCount, onMove, onDragStart, onDragEnd);
 
   return (
     <View
       style={[
         styles.row,
         isActive && styles.rowActive,
+        isDragging && styles.rowDragging,
         isDragging && {
           transform: [{ translateY: dragOffsetY }],
-          zIndex: 10,
-          borderColor: COLORS.primary,
         },
       ]}>
-      <View style={styles.dragHandle} {...panResponder.panHandlers}>
-        <Text style={styles.dragHandleIcon}>≡</Text>
+      <View
+        style={styles.dragHandle}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        {...panHandlers}>
+        <Text style={styles.dragHandleIcon}>:::</Text>
       </View>
 
       <TouchableOpacity
@@ -100,48 +62,70 @@ function QueueRow({
           {index + 1}. {track.title}
         </Text>
         <Text style={styles.trackSubtitle} numberOfLines={1}>
-          {track.subtitle}
+          {track.sourceType === 'radio' ? 'RADIO' : 'EPISODE'} • {track.subtitle}
         </Text>
       </TouchableOpacity>
 
       <View style={styles.rowActions}>
-        {index > 0 && (
-          <TouchableOpacity
-            style={styles.stepBtn}
-            onPress={() => onMove(index, index - 1)}>
-            <Text style={styles.stepBtnText}>↑</Text>
+        {canMoveUp && (
+          <TouchableOpacity style={styles.stepBtn} onPress={onMoveUp}>
+            <Text style={styles.stepBtnText}>UP</Text>
           </TouchableOpacity>
         )}
-        {index < totalCount - 1 && (
-          <TouchableOpacity
-            style={styles.stepBtn}
-            onPress={() => onMove(index, index + 1)}>
-            <Text style={styles.stepBtnText}>↓</Text>
+        {canMoveDown && (
+          <TouchableOpacity style={styles.stepBtn} onPress={onMoveDown}>
+            <Text style={styles.stepBtnText}>DN</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
           style={styles.removeBtn}
           onPress={() => onRemove(track.id)}>
-          <Text style={styles.removeBtnText}>✕</Text>
+          <Text style={styles.removeBtnText}>X</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-export function QueueSheet(): React.JSX.Element {
-  const queue = usePlayerStore((state) => state.queue);
-  const activeTrack = usePlayerStore((state) => state.activeTrack);
+export interface QueueSheetProps {
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+}
+
+export function QueueSheet({
+  onDragStart,
+  onDragEnd,
+}: QueueSheetProps = {}): React.JSX.Element {
+  const {
+    queue,
+    activeTrackId,
+    onSelectTrack,
+    onMoveTrack,
+    onRemoveTrack,
+    onClearQueue,
+  } = useQueueSheet();
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Up Next Queue ({queue.length})</Text>
-        <Text style={styles.hint}>Drag handle ≡ or arrows to reorder</Text>
+        <View style={styles.headerTitleBox}>
+          <Text style={styles.title}>Up Next Queue ({queue.length})</Text>
+          <Text style={styles.hint}>Drag ::: or use buttons to reorder</Text>
+        </View>
+        {queue.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearBtn}
+            onPress={onClearQueue}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.clearBtnText}>CLEAR ALL</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {queue.length === 0 ? (
-        <Text style={styles.emptyText}>Queue is empty.</Text>
+        <Text style={styles.emptyText}>
+          Queue is empty. Tap &quot;+ QUEUE&quot; on any radio station or podcast episode to build your playlist.
+        </Text>
       ) : (
         queue.map((item, idx) => (
           <QueueRow
@@ -149,16 +133,12 @@ export function QueueSheet(): React.JSX.Element {
             track={item}
             index={idx}
             totalCount={queue.length}
-            isActive={activeTrack?.id === item.id}
-            onSelect={(selected) => {
-              startPlayableTrack(selected, 0).catch(() => {});
-            }}
-            onMove={(from, to) => {
-              reorderPlaybackQueue(from, to).catch(() => {});
-            }}
-            onRemove={(trackId) => {
-              removeTrackFromPlaybackQueue(trackId).catch(() => {});
-            }}
+            isActive={activeTrackId === item.id}
+            onSelect={onSelectTrack}
+            onMove={onMoveTrack}
+            onRemove={onRemoveTrack}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
           />
         ))
       )}
@@ -193,9 +173,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     paddingVertical: 12,
+    lineHeight: 19,
   },
   row: {
-    height: ROW_HEIGHT,
+    height: QUEUE_ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surfaceElevated,
@@ -208,17 +189,45 @@ const styles = StyleSheet.create({
   rowActive: {
     borderColor: COLORS.primary,
   },
+  rowDragging: {
+    zIndex: 999,
+    elevation: 8,
+    borderColor: COLORS.primary,
+    backgroundColor: '#1b263b',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+  },
   dragHandle: {
-    width: 32,
+    width: 44,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
+    marginRight: 4,
+    paddingHorizontal: 6,
   },
   dragHandleIcon: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: COLORS.primary,
+  },
+  headerTitleBox: {
+    flex: 1,
+  },
+  clearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(244, 63, 94, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+  },
+  clearBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.accent,
+    letterSpacing: 0.5,
   },
   trackInfo: {
     flex: 1,

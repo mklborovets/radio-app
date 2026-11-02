@@ -101,7 +101,7 @@ export async function persistParsedFeedInBatches(
   for (let offset = 0; offset < operations.length; offset += BATCH_CHUNK_SIZE) {
     const chunk = operations.slice(offset, offset + BATCH_CHUNK_SIZE);
     await database.write(async () => {
-      await database.batch(...chunk);
+      await database.batch(chunk);
     });
   }
 

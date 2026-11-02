@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { startPlayableTrack, usePlayerStore } from '@entities/player';
 import {
@@ -11,7 +11,6 @@ import {
   subscribeToStreamNetworkState,
   subscribeToStreamRecoveryStatus,
 } from '@shared/lib/native';
-import { COLORS } from '@shared/ui';
 
 export interface StreamRecoveryBannerState {
   phase: StreamGuardRecoveryPhase;
@@ -77,7 +76,8 @@ export function useStreamGuardCoordinator(): void {
         if (
           current &&
           current.sourceType === 'radio' &&
-          current.streamOrFileUrl === event.streamUrl
+          current.streamOrFileUrl === event.streamUrl &&
+          (!playerState.isPlaying || playerState.playbackError !== null)
         ) {
           startPlayableTrack(current, 0).catch(() => {});
         }
@@ -99,7 +99,17 @@ export function useStreamGuardCoordinator(): void {
   }, [activeTrack, isPlaying]);
 }
 
-export function StreamRecoveryBanner(): React.JSX.Element | null {
+export interface UseStreamRecoveryBannerResult {
+  visible: boolean;
+  showReconnectBanner: boolean;
+  showBatteryBanner: boolean;
+  recoveryTitle: string;
+  recoveryMeta: string;
+  onRetryNow: () => void;
+  onRequestBatteryExemption: () => void;
+}
+
+export function useStreamRecoveryBanner(): UseStreamRecoveryBannerResult {
   const phase = useStreamRecoveryStore((state) => state.phase);
   const attempt = useStreamRecoveryStore((state) => state.attempt);
   const delayMs = useStreamRecoveryStore((state) => state.delayMs);
@@ -112,127 +122,40 @@ export function StreamRecoveryBanner(): React.JSX.Element | null {
     (state) => state.setBatteryOptimizationIgnored,
   );
 
-  const showReconnectBanner = phase === 'reconnecting' || phase === 'failed' || !isConnected;
+  const showReconnectBanner =
+    phase === 'reconnecting' || phase === 'failed' || !isConnected;
   const showBatteryBanner = Platform.OS === 'android' && !isIgnoringBattery;
+  const visible = showReconnectBanner || showBatteryBanner;
 
-  if (!showReconnectBanner && !showBatteryBanner) {
-    return null;
-  }
+  const recoveryTitle =
+    phase === 'failed'
+      ? 'Stream Disconnected'
+      : `StreamGuard Reconnecting (Attempt #${Math.max(1, attempt)})`;
 
-  return (
-    <View style={styles.wrapper}>
-      {showReconnectBanner && (
-        <View style={styles.recoveryCard}>
-          <View style={styles.recoveryTextCol}>
-            <Text style={styles.recoveryTitle}>
-              {phase === 'failed'
-                ? 'Stream Disconnected'
-                : `StreamGuard Reconnecting (Attempt #${Math.max(1, attempt)})`}
-            </Text>
-            <Text style={styles.recoveryMeta}>
-              Network: {isConnected ? transport.toUpperCase() : 'OFFLINE'}
-              {delayMs > 0 ? ` • Backoff ${Math.round(delayMs / 1000)}s` : ''}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.retryBtn}
-            onPress={() => {
-              StreamGuardNative.triggerManualReconnect().catch(() => {});
-            }}>
-            <Text style={styles.retryBtnText}>RETRY NOW</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+  const networkLabel = isConnected ? transport.toUpperCase() : 'OFFLINE';
+  const backoffSuffix = delayMs > 0 ? ` • Backoff ${Math.round(delayMs / 1000)}s` : '';
+  const recoveryMeta = `Network: ${networkLabel}${backoffSuffix}`;
 
-      {showBatteryBanner && (
-        <View style={styles.batteryCard}>
-          <Text style={styles.batteryText}>
-            Unrestricted background battery access is recommended for stable radio streaming.
-          </Text>
-          <TouchableOpacity
-            style={styles.batteryBtn}
-            onPress={() => {
-              StreamGuardNative.requestIgnoreBatteryOptimizations()
-                .then((granted) => {
-                  setBatteryOptimizationIgnored(granted);
-                })
-                .catch(() => {});
-            }}>
-            <Text style={styles.batteryBtnText}>ALLOW</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+  const onRetryNow = useCallback(() => {
+    StreamGuardNative.triggerManualReconnect().catch(() => {});
+  }, []);
+
+  const onRequestBatteryExemption = useCallback(() => {
+    StreamGuardNative.requestIgnoreBatteryOptimizations()
+      .then((granted) => {
+        setBatteryOptimizationIgnored(granted);
+      })
+      .catch(() => {});
+  }, [setBatteryOptimizationIgnored]);
+
+  return {
+    visible,
+    showReconnectBanner,
+    showBatteryBanner,
+    recoveryTitle,
+    recoveryMeta,
+    onRetryNow,
+    onRequestBatteryExemption,
+  };
 }
-
-const styles = StyleSheet.create({
-  wrapper: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  recoveryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: COLORS.warning,
-  },
-  recoveryTextCol: {
-    flex: 1,
-    marginRight: 10,
-  },
-  recoveryTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.warning,
-  },
-  recoveryMeta: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  retryBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: COLORS.warning,
-  },
-  retryBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.background,
-  },
-  batteryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  batteryText: {
-    flex: 1,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginRight: 10,
-  },
-  batteryBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: COLORS.primary,
-  },
-  batteryBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.background,
-  },
-});
 
