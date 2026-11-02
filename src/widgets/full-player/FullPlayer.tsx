@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,7 @@ import { QueueSheet } from '@widgets/queue-sheet';
 import { PlaybackControlsPanel } from '@features/playback-controls';
 import { SleepTimerControl } from '@features/sleep-timer';
 import { StreamRecoveryBanner } from '@features/stream-recovery';
-import { COLORS } from '@shared/ui';
+import { Artwork, Banner, COLORS, ProgressBar } from '@shared/ui';
 import { useFullPlayer } from './model';
 
 export interface FullPlayerProps {
@@ -53,40 +52,30 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
         <View style={styles.headerSpacer} />
       </View>
 
+      {playbackError && (
+        <Banner
+          message={playbackError}
+          variant="error"
+          onDismiss={onDismissError}
+          style={styles.errorOverlayCard}
+        />
+      )}
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         scrollEnabled={isScrollEnabled}
         showsVerticalScrollIndicator={false}>
-        {playbackError && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorCardText}>{playbackError}</Text>
-            <TouchableOpacity style={styles.errorDismissBtn} onPress={onDismissError}>
-              <Text style={styles.errorDismissText}>DISMISS</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
       {activeTrack ? (
         <View style={styles.body}>
-          <View style={styles.artworkCard}>
-            {Boolean(activeTrack.artworkUrl) &&
-            activeTrack.artworkUrl !== 'null' &&
-            activeTrack.artworkUrl !== 'undefined' &&
-            (activeTrack.artworkUrl.startsWith('http://') ||
-              activeTrack.artworkUrl.startsWith('https://') ||
-              activeTrack.artworkUrl.startsWith('file://')) ? (
-              <Image
-                source={{ uri: activeTrack.artworkUrl }}
-                style={styles.artworkImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.artworkFallback}>
-                <Text style={styles.artworkFallbackText}>{initials}</Text>
-              </View>
-            )}
-          </View>
+          <Artwork
+            uri={activeTrack.artworkUrl}
+            fallbackText={initials}
+            size={200}
+            borderRadius={18}
+            style={styles.artworkCard}
+          />
 
           <Text style={styles.trackTitle} numberOfLines={2}>
             {activeTrack.title}
@@ -97,14 +86,11 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
 
           {hasTimeline ? (
             <View style={styles.timelineSection}>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${progressWidthPercent}%` },
-                  ]}
-                />
-              </View>
+              <ProgressBar
+                progress={progressWidthPercent}
+                height={6}
+                borderRadius={3}
+              />
               <View style={styles.timeRow}>
                 <Text style={styles.timeLabel}>{formattedPosition}</Text>
                 <Text style={styles.timeLabel}>{formattedDuration}</Text>
@@ -157,20 +143,14 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
             </View>
           )}
 
-          {isRadio && (
-            <View style={styles.recoveryBannerBox}>
-              <StreamRecoveryBanner />
-            </View>
-          )}
-
+          <StreamRecoveryBanner />
           <PlaybackControlsPanel isRadioStream={isRadio} />
           <SleepTimerControl />
         </View>
       ) : (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>Nothing is playing</Text>
-          <Text style={styles.emptySubtitle}>
-            Choose a radio station or podcast episode to begin playback.
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            No track currently selected. Tap any radio station or episode to begin playback.
           </Text>
         </View>
       )}
@@ -207,12 +187,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.background,
-    zIndex: 10,
   },
   closeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -221,71 +199,35 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.primary,
   },
   headerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  headerSpacer: {
-    width: 64,
-  },
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorCardText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#FDA4AF',
-    fontWeight: '600',
-    marginRight: 10,
-  },
-  errorDismissBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: COLORS.accent,
-  },
-  errorDismissText: {
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.textPrimary,
+  },
+  headerSpacer: {
+    width: 58,
+  },
+  errorOverlayCard: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    right: 16,
+    zIndex: 99,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
   },
   body: {
     alignItems: 'center',
   },
   artworkCard: {
-    width: 200,
-    height: 200,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: 18,
-  },
-  artworkImage: {
-    width: '100%',
-    height: '100%',
-  },
-  artworkFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  artworkFallbackText: {
-    fontSize: 44,
-    fontWeight: '700',
-    color: COLORS.primary,
   },
   trackTitle: {
     fontSize: 20,
@@ -302,17 +244,6 @@ const styles = StyleSheet.create({
   timelineSection: {
     width: '100%',
     marginTop: 22,
-  },
-  progressTrack: {
-    height: 6,
-    width: '100%',
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
   },
   timeRow: {
     flexDirection: 'row',
@@ -367,29 +298,30 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   downloadButtonTextDone: {
-    color: '#22c55e',
+    color: COLORS.success,
   },
   liveBadge: {
-    marginTop: 16,
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
+    marginTop: 14,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
   },
   liveBadgeConnecting: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderColor: COLORS.warning,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
   },
   liveBadgeError: {
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
-    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+    borderColor: 'rgba(244, 63, 94, 0.4)',
   },
   liveBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.primary,
+    letterSpacing: 1,
   },
   liveBadgeTextConnecting: {
     color: COLORS.warning,
@@ -397,28 +329,18 @@ const styles = StyleSheet.create({
   liveBadgeTextError: {
     color: COLORS.accent,
   },
-  recoveryBannerBox: {
-    width: '100%',
-    marginTop: 14,
-  },
-  queueWrapper: {
-    width: '100%',
-    marginTop: 24,
-  },
-  emptyBox: {
-    paddingVertical: 48,
+  emptyContainer: {
+    padding: 32,
     alignItems: 'center',
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  emptySubtitle: {
+  emptyText: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 8,
     textAlign: 'center',
+    lineHeight: 20,
+  },
+  queueWrapper: {
+    marginTop: 20,
+    width: '100%',
   },
 });
-

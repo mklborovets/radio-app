@@ -1,6 +1,12 @@
-import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS } from '@shared/ui';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActionMenuModal,
+  Artwork,
+  COLORS,
+  MoreOptionsButton,
+  PlayPauseButton,
+} from '@shared/ui';
 import { getStationCardViewModel, RadioStation } from './model';
 
 export interface StationCardProps {
@@ -32,13 +38,7 @@ export function StationCard({
     isQueued,
   );
 
-  const hasValidFavicon =
-    Boolean(station.faviconUrl) &&
-    station.faviconUrl !== 'null' &&
-    station.faviconUrl !== 'undefined' &&
-    (station.faviconUrl.startsWith('http://') ||
-      station.faviconUrl.startsWith('https://') ||
-      station.faviconUrl.startsWith('file://'));
+  const [menuVisible, setMenuVisible] = useState(false);
 
   return (
     <View style={[styles.card, isCurrentStation && styles.cardActive]}>
@@ -46,19 +46,13 @@ export function StationCard({
         style={styles.mainTouchable}
         activeOpacity={0.85}
         onPress={() => onPressPlay(station)}>
-        <View style={styles.logoContainer}>
-          {hasValidFavicon ? (
-            <Image
-              source={{ uri: station.faviconUrl }}
-              style={styles.logoImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.logoFallback}>
-              <Text style={styles.logoFallbackText}>{viewModel.initials}</Text>
-            </View>
-          )}
-        </View>
+        <Artwork
+          uri={station.faviconUrl}
+          fallbackText={viewModel.initials}
+          size={50}
+          borderRadius={10}
+          style={styles.logo}
+        />
 
         <View style={styles.details}>
           <Text style={styles.name} numberOfLines={1}>
@@ -75,48 +69,41 @@ export function StationCard({
         </View>
       </TouchableOpacity>
 
-      <View style={styles.actionsColumn}>
-        <View style={styles.topActionsRow}>
-          <TouchableOpacity
-            style={[styles.queueButton, isQueued && styles.queueButtonActive]}
-            onPress={() => onPressAddToQueue(station)}>
-            <Text style={[styles.queueText, isQueued && styles.queueTextActive]}>
-              {viewModel.queueLabel}
-            </Text>
-          </TouchableOpacity>
+      <View style={styles.actionsCluster}>
+        <PlayPauseButton
+          isPlaying={viewModel.isLivePlaying}
+          isLoading={viewModel.isConnecting}
+          variant={
+            viewModel.isConnecting
+              ? 'connecting'
+              : viewModel.isLivePlaying
+              ? 'active'
+              : 'default'
+          }
+          onPress={() => onPressPlay(station)}
+        />
 
-          <TouchableOpacity
-            style={[
-              styles.favoriteButton,
-              station.isFavorite && styles.favoriteButtonActive,
-            ]}
-            onPress={() => onPressToggleFavorite(station)}>
-            <Text
-              style={[
-                styles.favoriteText,
-                station.isFavorite && styles.favoriteTextActive,
-              ]}>
-              {viewModel.favoriteLabel}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={[
-            styles.playBadge,
-            viewModel.isLivePlaying && styles.playBadgeActive,
-            viewModel.isConnecting && styles.playBadgeConnecting,
-          ]}
-          onPress={() => onPressPlay(station)}>
-          <Text
-            style={[
-              styles.playBadgeText,
-              viewModel.isLivePlaying && styles.playBadgeTextActive,
-            ]}>
-            {viewModel.playBadgeLabel}
-          </Text>
-        </TouchableOpacity>
+        <MoreOptionsButton onPress={() => setMenuVisible(true)} />
       </View>
+
+      <ActionMenuModal
+        visible={menuVisible}
+        title={station.name}
+        onClose={() => setMenuVisible(false)}
+        closeLabel="CANCEL"
+        options={[
+          {
+            label: station.isFavorite ? 'REMOVE FROM FAVORITES' : 'ADD TO FAVORITES',
+            isActive: station.isFavorite,
+            onPress: () => onPressToggleFavorite(station),
+          },
+          {
+            label: isQueued ? 'REMOVE FROM QUEUE' : 'ADD TO QUEUE',
+            isActive: isQueued,
+            onPress: () => onPressAddToQueue(station),
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -142,27 +129,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-  logoContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: COLORS.surfaceElevated,
+  logo: {
     marginRight: 12,
-  },
-  logoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  logoFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoFallbackText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.primary,
   },
   details: {
     flex: 1,
@@ -182,75 +150,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 2,
   },
-  actionsColumn: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  topActionsRow: {
+  actionsCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  queueButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surfaceElevated,
-  },
-  queueButtonActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-  },
-  queueText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  queueTextActive: {
-    color: COLORS.primary,
-  },
-  favoriteButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  favoriteButtonActive: {
-    borderColor: COLORS.accent,
-    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-  },
-  favoriteText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  favoriteTextActive: {
-    color: COLORS.accent,
-  },
-  playBadge: {
-    backgroundColor: COLORS.surfaceElevated,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 8,
-    minWidth: 74,
-    alignItems: 'center',
-  },
-  playBadgeActive: {
-    backgroundColor: COLORS.primary,
-  },
-  playBadgeConnecting: {
-    backgroundColor: COLORS.warning,
-  },
-  playBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  playBadgeTextActive: {
-    color: COLORS.background,
+    gap: 8,
   },
 });

@@ -2,7 +2,6 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
@@ -10,7 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { COLORS, ScreenContainer } from '@shared/ui';
+import {
+  Artwork,
+  Banner,
+  COLORS,
+  EmptyState,
+  ScreenContainer,
+} from '@shared/ui';
 import { usePodcastsFeedPage } from './model';
 
 export function PodcastsFeedPage(): React.JSX.Element {
@@ -67,8 +72,20 @@ export function PodcastsFeedPage(): React.JSX.Element {
           ))}
         </View>
 
-        {errorMessage && <Text style={styles.errorBanner}>{errorMessage}</Text>}
-        {statusMessage && <Text style={styles.statusBanner}>{statusMessage}</Text>}
+        {errorMessage && (
+          <Banner
+            message={errorMessage}
+            variant="error"
+            style={styles.banner}
+          />
+        )}
+        {statusMessage && (
+          <Banner
+            message={statusMessage}
+            variant="success"
+            style={styles.banner}
+          />
+        )}
       </View>
 
       <FlatList
@@ -87,24 +104,13 @@ export function PodcastsFeedPage(): React.JSX.Element {
             style={styles.podcastCard}
             activeOpacity={0.85}
             onPress={() => onPressPodcast(item.podcast)}>
-            <View style={styles.artworkBox}>
-              {Boolean(item.podcast.artworkUrl) &&
-              item.podcast.artworkUrl !== 'null' &&
-              item.podcast.artworkUrl !== 'undefined' &&
-              (item.podcast.artworkUrl.startsWith('http://') ||
-                item.podcast.artworkUrl.startsWith('https://') ||
-                item.podcast.artworkUrl.startsWith('file://')) ? (
-                <Image
-                  source={{ uri: item.podcast.artworkUrl }}
-                  style={styles.artworkImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.artworkFallback}>
-                  <Text style={styles.artworkFallbackText}>{item.initials}</Text>
-                </View>
-              )}
-            </View>
+            <Artwork
+              uri={item.podcast.artworkUrl}
+              fallbackText={item.initials}
+              size={64}
+              borderRadius={10}
+              style={styles.artworkBox}
+            />
             <View style={styles.podcastInfo}>
               <Text style={styles.podcastTitle} numberOfLines={1}>
                 {item.podcast.title}
@@ -119,12 +125,9 @@ export function PodcastsFeedPage(): React.JSX.Element {
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>
-              No podcast subscriptions yet. Enter an RSS URL above or tap a quick
-              preset to subscribe.
-            </Text>
-          </View>
+          <EmptyState
+            message="No podcast subscriptions yet. Enter an RSS URL above or tap a quick preset to subscribe."
+          />
         }
       />
     </ScreenContainer>
@@ -161,27 +164,28 @@ const styles = StyleSheet.create({
   addButton: {
     height: 44,
     paddingHorizontal: 16,
-    borderRadius: 10,
     backgroundColor: COLORS.primary,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 88,
   },
   addButtonText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.background,
+    letterSpacing: 0.5,
   },
   presetsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
   },
   presetChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -190,15 +194,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
-  errorBanner: {
+  banner: {
     marginTop: 10,
-    fontSize: 12,
-    color: COLORS.accent,
-  },
-  statusBanner: {
-    marginTop: 10,
-    fontSize: 12,
-    color: COLORS.success,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -215,26 +212,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   artworkBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: COLORS.surfaceElevated,
     marginRight: 12,
-  },
-  artworkImage: {
-    width: '100%',
-    height: '100%',
-  },
-  artworkFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  artworkFallbackText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.primary,
   },
   podcastInfo: {
     flex: 1,
@@ -255,16 +233,4 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
-  emptyBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
 });
-

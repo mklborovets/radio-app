@@ -11,6 +11,7 @@ import TrackPlayer, {
 import { Q } from '@nozbe/watermelondb';
 import { database, TableName, EpisodeModel } from '@shared/db';
 import { fetchWithTimeout } from '@shared/api';
+import { sanitizeImageUrl } from '@shared/lib';
 import { flushEpisodePlaybackProgress } from '@entities/episode';
 import { useStationFilterStore } from '@features/filter-stations';
 import { PlayableTrack, PlaybackSpeed, usePlayerStore } from './store';
@@ -191,16 +192,8 @@ export async function ensureTrackPlayerInitialized(): Promise<void> {
 export function mapPlayableTrackToNativeTrack(playable: PlayableTrack): Track {
   const lowerUrl = playable.streamOrFileUrl.toLowerCase();
   const isHls = lowerUrl.includes('.m3u8');
-  const rawArtwork = playable.artworkUrl?.trim();
-  const validArtwork =
-    rawArtwork &&
-    rawArtwork !== 'null' &&
-    rawArtwork !== 'undefined' &&
-    (rawArtwork.startsWith('http://') ||
-      rawArtwork.startsWith('https://') ||
-      rawArtwork.startsWith('file://'))
-      ? rawArtwork
-      : undefined;
+  const sanitized = sanitizeImageUrl(playable.artworkUrl);
+  const validArtwork = sanitized ? sanitized : undefined;
 
   return {
     id: playable.id,

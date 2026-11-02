@@ -7,7 +7,7 @@ import {
   togglePlaybackState,
   usePlayerStore,
 } from '@entities/player';
-import { formatTime } from '@shared/lib/formatTime';
+import { formatTime, getInitials } from '@shared/lib';
 
 export interface UseMiniPlayerResult {
   activeTrack: PlayableTrack | null;
@@ -109,7 +109,7 @@ export function useMiniPlayer(): UseMiniPlayerResult {
     isBuffering,
     showProgressBar,
     progressWidthPercent: progressRatio * 100,
-    initials: activeTrack.title.slice(0, 2).toUpperCase(),
+    initials: getInitials(activeTrack.title),
     subtitleText,
     playButtonLabel,
     queueBadgeLabel: `QUEUE (${queue.length})`,

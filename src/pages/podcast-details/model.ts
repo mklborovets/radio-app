@@ -16,15 +16,11 @@ import {
   usePlayerStore,
 } from '@entities/player';
 import { getPodcastById, PodcastEntity } from '@entities/podcast';
-import {
-  countEpisodesForPodcast,
-  EpisodeEntity,
-  queryPaginatedEpisodesForPodcast,
-} from '@entities/episode';
+import { EpisodeEntity, queryEpisodesForPodcast } from '@entities/episode';
 import { formatTime } from '@shared/lib/formatTime';
 import { database, EpisodeModel, TableName } from '@shared/db';
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 15;
 
 export function mapEpisodeToPlayableTrack(
   episode: EpisodeEntity,
@@ -63,6 +59,7 @@ export interface UsePodcastDetailsPageResult {
   headerTitle: string;
   summarySubtitle: string;
   episodeRows: EpisodeRowViewModel[];
+  totalCount: number;
   isLoadingMore: boolean;
   isRefreshingFeed: boolean;
   onRefreshRss: () => void;
@@ -81,10 +78,10 @@ export function usePodcastDetailsPage(
   onNavigateToPlayer?: () => void,
 ): UsePodcastDetailsPageResult {
   const [podcast, setPodcast] = useState<PodcastEntity | null>(null);
-  const [episodes, setEpisodes] = useState<EpisodeEntity[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [allEpisodes, setAllEpisodes] = useState<EpisodeEntity[]>([]);
+  const [displayCount, setDisplayCount] = useState<number>(PAGE_SIZE);
+  const [_isLoadingInitial, setIsLoadingInitial] = useState(true);
+  const [isLoadingMore, _setIsLoadingMore] = useState(false);
   const [isRefreshingFeed, setIsRefreshingFeed] = useState(false);
 
   const activeTrack = usePlayerStore((state) => state.activeTrack);
@@ -92,45 +89,39 @@ export function usePodcastDetailsPage(
   const queue = usePlayerStore((state) => state.queue);
   const downloadTasks = useDownloadManagerStore((state) => state.tasks);
 
+  const loadEpisodesFromDb = useCallback(async () => {
+    try {
+      const [podcastData, list] = await Promise.all([
+        getPodcastById(podcastId),
+        queryEpisodesForPodcast(podcastId),
+      ]);
+      setPodcast(podcastData);
+      setAllEpisodes(list);
+    } catch {}
+  }, [podcastId]);
+
   const loadInitialPage = useCallback(async () => {
     setIsLoadingInitial(true);
     try {
-      const [podcastData, total, firstPage] = await Promise.all([
-        getPodcastById(podcastId),
-        countEpisodesForPodcast(podcastId),
-        queryPaginatedEpisodesForPodcast(podcastId, 0, PAGE_SIZE),
-      ]);
-      setPodcast(podcastData);
-      setTotalCount(total);
-      setEpisodes(firstPage);
+      await loadEpisodesFromDb();
+      setDisplayCount(PAGE_SIZE);
     } finally {
       setIsLoadingInitial(false);
     }
-  }, [podcastId]);
+  }, [loadEpisodesFromDb]);
 
   useEffect(() => {
     loadInitialPage().catch(() => {});
   }, [loadInitialPage]);
 
-  const loadNextPage = useCallback(async () => {
-    if (isLoadingMore || isLoadingInitial || episodes.length >= totalCount) {
-      return;
-    }
-
-    setIsLoadingMore(true);
-    try {
-      const nextSlice = await queryPaginatedEpisodesForPodcast(
-        podcastId,
-        episodes.length,
-        PAGE_SIZE,
-      );
-      if (nextSlice.length > 0) {
-        setEpisodes((prev) => [...prev, ...nextSlice]);
+  const loadNextPage = useCallback(() => {
+    setDisplayCount((prev) => {
+      if (prev >= allEpisodes.length) {
+        return prev;
       }
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [episodes.length, isLoadingInitial, isLoadingMore, podcastId, totalCount]);
+      return Math.min(prev + PAGE_SIZE, allEpisodes.length);
+    });
+  }, [allEpisodes.length]);
 
   const handleRefreshRss = useCallback(async () => {
     if (!podcast) {
@@ -140,13 +131,13 @@ export function usePodcastDetailsPage(
     setIsRefreshingFeed(true);
     try {
       await subscribeOrRefreshPodcastFeed(podcast.feedUrl);
-      await loadInitialPage();
+      await loadEpisodesFromDb();
     } catch {
-      await loadInitialPage();
+      await loadEpisodesFromDb();
     } finally {
       setIsRefreshingFeed(false);
     }
-  }, [loadInitialPage, podcast]);
+  }, [loadEpisodesFromDb, podcast]);
 
   const onPlayEpisode = useCallback(
     async (episode: EpisodeEntity) => {
@@ -192,22 +183,22 @@ export function usePodcastDetailsPage(
 
       if (currentStatus === 'downloading') {
         await pauseEpisodeDownload(episode.id);
-        await loadInitialPage();
+        await loadEpisodesFromDb();
         return;
       }
 
       if (currentStatus === 'completed') {
         await deleteEpisodeDownloadedFiles(episode.id);
-        await loadInitialPage();
+        await loadEpisodesFromDb();
         return;
       }
 
       await startOrResumeEpisodeDownload(episode.id, async () => {
         await enforceCacheStorageLimitLru(undefined, episode.id);
-        await loadInitialPage();
+        await loadEpisodesFromDb();
       });
     },
-    [downloadTasks, loadInitialPage],
+    [downloadTasks, loadEpisodesFromDb],
   );
 
   const onDownloadAction = useCallback(
@@ -230,11 +221,15 @@ export function usePodcastDetailsPage(
   }, [handleRefreshRss]);
 
   const onLoadNextPage = useCallback(() => {
-    loadNextPage().catch(() => {});
+    loadNextPage();
   }, [loadNextPage]);
 
+  const displayedEpisodes = useMemo(() => {
+    return allEpisodes.slice(0, displayCount);
+  }, [allEpisodes, displayCount]);
+
   const episodeRows = useMemo<EpisodeRowViewModel[]>(() => {
-    return episodes.map((item) => {
+    return displayedEpisodes.map((item) => {
       const isCurrent = activeTrack?.id === item.id;
       const isQueued = queue.some((q) => q.id === item.id);
       const liveTask = downloadTasks[item.id];
@@ -279,7 +274,7 @@ export function usePodcastDetailsPage(
         playLabel,
       };
     });
-  }, [activeTrack?.id, downloadTasks, episodes, isPlaying, queue]);
+  }, [activeTrack?.id, displayedEpisodes, downloadTasks, isPlaying, queue]);
 
   const onOpenEpisodeDetails = useCallback(
     async (episode: EpisodeEntity) => {
@@ -293,8 +288,9 @@ export function usePodcastDetailsPage(
 
   return {
     headerTitle: podcast?.title ?? fallbackTitle,
-    summarySubtitle: `${totalCount} episodes • Showing ${episodes.length}`,
+    summarySubtitle: `${allEpisodes.length} episodes • Showing ${displayedEpisodes.length}`,
     episodeRows,
+    totalCount: allEpisodes.length,
     isLoadingMore,
     isRefreshingFeed,
     onRefreshRss,

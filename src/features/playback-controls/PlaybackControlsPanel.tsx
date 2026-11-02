@@ -1,12 +1,6 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { COLORS } from '@shared/ui';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS, PlayPauseButton } from '@shared/ui';
 import { usePlaybackControls } from './model';
 
 export interface PlaybackControlsPanelProps {
@@ -41,21 +35,13 @@ export function PlaybackControlsPanel({
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          style={styles.primaryButton}
+        <PlayPauseButton
+          isPlaying={isPlaying}
+          isLoading={isBuffering}
+          size="large"
+          variant="primary"
           onPress={onTogglePlay}
-          activeOpacity={0.85}>
-          {isBuffering ? (
-            <ActivityIndicator size="small" color={COLORS.background} />
-          ) : isPlaying ? (
-            <View style={styles.pauseIconContainer}>
-              <View style={styles.pauseBar} />
-              <View style={styles.pauseBar} />
-            </View>
-          ) : (
-            <Text style={[styles.primaryIcon, styles.playIconOffset]}>▶</Text>
-          )}
-        </TouchableOpacity>
+        />
 
         {hasMultipleTracks && (
           <TouchableOpacity
@@ -121,34 +107,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 14,
   },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryIcon: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.background,
-  },
-  pauseIconContainer: {
-    flexDirection: 'row',
-    gap: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pauseBar: {
-    width: 4,
-    height: 18,
-    borderRadius: 2,
-    backgroundColor: COLORS.background,
-  },
-  playIconOffset: {
-    marginLeft: 3,
-  },
   navButton: {
     backgroundColor: COLORS.surface,
     width: 50,
@@ -169,41 +127,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
-    marginTop: 14,
+    marginTop: 16,
   },
   seekButton: {
-    backgroundColor: COLORS.surface,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   seekButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   speedSection: {
-    marginTop: 24,
+    marginTop: 18,
+    alignItems: 'center',
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
     marginBottom: 8,
-    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   speedRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   speedChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -213,12 +173,11 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   speedChipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: COLORS.textSecondary,
   },
   speedChipTextActive: {
     color: COLORS.background,
   },
 });
-

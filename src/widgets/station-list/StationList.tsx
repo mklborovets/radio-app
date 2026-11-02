@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { RadioStation, StationCard } from '@entities/station';
-import { COLORS } from '@shared/ui';
+import { COLORS, EmptyState } from '@shared/ui';
 import { useStationList } from './model';
 
 export interface StationListProps {
@@ -90,9 +90,7 @@ export function StationList({
         />
       )}
       ListEmptyComponent={
-        <View style={styles.centered}>
-          <Text style={styles.statusText}>No stations found matching your criteria.</Text>
-        </View>
+        <EmptyState message="No stations found matching your criteria." />
       }
     />
   );
@@ -123,4 +121,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

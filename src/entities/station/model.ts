@@ -1,5 +1,8 @@
 import { Q } from '@nozbe/watermelondb';
 import { database, StationFavoriteModel, TableName } from '@shared/db';
+import { getInitials, sanitizeImageUrl } from '@shared/lib';
+
+export { sanitizeImageUrl };
 
 export interface RadioBrowserStationDto {
   stationuuid: string;
@@ -35,17 +38,6 @@ export interface SearchStationsParams {
   tag?: string;
   limit?: number;
   offset?: number;
-}
-
-export function sanitizeImageUrl(raw?: string | null): string {
-  if (!raw) return '';
-  const trimmed = raw.trim();
-  const lower = trimmed.toLowerCase();
-  if (lower === '' || lower === 'null' || lower === 'undefined') return '';
-  if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('file://')) {
-    return trimmed;
-  }
-  return '';
 }
 
 export function mapDtoToRadioStation(
@@ -188,7 +180,7 @@ export function getStationCardViewModel(
   }
 
   return {
-    initials: station.name.slice(0, 2).toUpperCase(),
+    initials: getInitials(station.name),
     metadataText: metadataParts.join(' • ') || 'Live Radio Stream',
     tagsText: station.tags.length > 0 ? station.tags.slice(0, 3).join(' · ') : null,
     favoriteLabel: station.isFavorite ? 'SAVED' : 'SAVE',

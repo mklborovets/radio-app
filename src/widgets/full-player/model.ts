@@ -12,7 +12,7 @@ import {
 } from '@features/download-episode';
 import { database, TableName } from '@shared/db';
 import { EpisodeDownloadStatus, EpisodeModel } from '@shared/db/models/EpisodeModel';
-import { formatTime } from '@shared/lib/formatTime';
+import { formatTime, getInitials } from '@shared/lib';
 
 export const SCRUB_PERCENTAGES: readonly number[] = [0, 0.25, 0.5, 0.75, 0.95];
 
@@ -154,7 +154,7 @@ export function useFullPlayer(): UseFullPlayerResult {
     hasTimeline,
     headerTitle: isRadio ? 'Live Radio Stream' : 'Podcast & Queue Player',
     liveBadgeLabel,
-    initials: activeTrack ? activeTrack.title.slice(0, 2).toUpperCase() : '',
+    initials: getInitials(activeTrack?.title),
     progressWidthPercent: progressRatio * 100,
     formattedPosition: formatTime(positionSeconds),
     formattedDuration: formatTime(effectiveDuration),

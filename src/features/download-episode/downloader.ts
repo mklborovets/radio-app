@@ -160,7 +160,7 @@ async function updateEpisodeDownloadFieldsInDb(
 
 async function performEpisodeDownload(
   episodeId: string,
-  onCompletedCallback?: () => Promise<void>,
+  _onCompletedCallback?: () => Promise<void>,
 ): Promise<void> {
   if (activeBlobTasks.has(episodeId)) {
     return;

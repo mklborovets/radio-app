@@ -2,6 +2,7 @@ export {
   countEpisodesForPodcast,
   getEpisodeById,
   mapEpisodeModelToEntity,
+  queryEpisodesForPodcast,
   queryPaginatedEpisodesForPodcast,
 } from './model';
 export type { EpisodeEntity } from './model';

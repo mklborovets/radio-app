@@ -43,6 +43,20 @@ export function mapEpisodeModelToEntity(model: EpisodeModel): EpisodeEntity {
   };
 }
 
+export async function queryEpisodesForPodcast(
+  podcastId: string,
+): Promise<EpisodeEntity[]> {
+  const collection = database.get<EpisodeModel>(TableName.Episodes);
+  const models = await collection
+    .query(
+      Q.where('podcast_id', podcastId),
+      Q.sortBy('published_at', Q.desc),
+    )
+    .fetch();
+
+  return models.map(mapEpisodeModelToEntity);
+}
+
 export async function queryPaginatedEpisodesForPodcast(
   podcastId: string,
   offset: number,

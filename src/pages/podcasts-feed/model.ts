@@ -8,6 +8,7 @@ import {
   PodcastEntity,
 } from '@entities/podcast';
 import { database, PodcastModel, TableName } from '@shared/db';
+import { getInitials } from '@shared/lib';
 import { RootStackParamList } from '@shared/config';
 
 export interface SampleFeedPreset {
@@ -142,7 +143,7 @@ export function usePodcastsFeedPage(): UsePodcastsFeedPageResult {
 
   const podcastItems: PodcastCardItemViewModel[] = podcasts.map((podcast) => ({
     podcast,
-    initials: podcast.title.slice(0, 2).toUpperCase(),
+    initials: getInitials(podcast.title),
   }));
 
   return {

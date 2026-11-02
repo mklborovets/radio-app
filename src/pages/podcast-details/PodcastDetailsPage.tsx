@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,8 +10,14 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@shared/config';
-import { COLORS, ScreenContainer } from '@shared/ui';
-import { usePodcastDetailsPage } from './model';
+import {
+  ActionMenuModal,
+  COLORS,
+  MoreOptionsButton,
+  PlayPauseButton,
+  ScreenContainer,
+} from '@shared/ui';
+import { EpisodeRowViewModel, usePodcastDetailsPage } from './model';
 
 export type PodcastDetailsPageProps = NativeStackScreenProps<
   RootStackParamList,
@@ -26,6 +32,7 @@ export function PodcastDetailsPage({
     headerTitle,
     summarySubtitle,
     episodeRows,
+    totalCount,
     isLoadingMore,
     isRefreshingFeed,
     onRefreshRss,
@@ -41,6 +48,18 @@ export function PodcastDetailsPage({
     navigation.goBack,
     () => navigation.navigate('PlayerModal'),
   );
+
+  const [activeMenuEpisode, setActiveMenuEpisode] = useState<EpisodeRowViewModel | null>(null);
+
+  const downloadOptionLabel = activeMenuEpisode
+    ? activeMenuEpisode.downloadLabel.startsWith('PAUSE')
+      ? 'PAUSE DOWNLOAD'
+      : activeMenuEpisode.downloadLabel.startsWith('RESUME')
+      ? 'RESUME DOWNLOAD'
+      : activeMenuEpisode.isCompletedDownload
+      ? 'DELETE DOWNLOADED FILE'
+      : 'DOWNLOAD EPISODE'
+    : '';
 
   return (
     <ScreenContainer includeTopInset={false} includeBottomInset>
@@ -61,9 +80,10 @@ export function PodcastDetailsPage({
       <FlatList
         data={episodeRows}
         keyExtractor={(item) => item.episode.id}
+        style={styles.list}
         contentContainerStyle={styles.listContent}
         onEndReached={onLoadNextPage}
-        onEndReachedThreshold={0.4}
+        onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshingFeed}
@@ -73,49 +93,28 @@ export function PodcastDetailsPage({
         }
         renderItem={({ item }) => (
           <View style={[styles.episodeCard, item.isCurrent && styles.episodeCardActive]}>
-            <TouchableOpacity
-              style={styles.episodeInfo}
-              activeOpacity={0.7}
-              onPress={() => onOpenEpisodeDetails(item.episode)}>
-              <Text style={styles.episodeTitle} numberOfLines={2}>
-                {item.episode.title}
-              </Text>
-              <Text style={styles.episodeMeta}>{item.metaText}</Text>
-            </TouchableOpacity>
-
-            <View style={styles.episodeActions}>
+            <View style={styles.episodeCardRow}>
               <TouchableOpacity
-                style={[
-                  styles.downloadBtn,
-                  item.isCompletedDownload && styles.downloadBtnDone,
-                ]}
-                onPress={() => onDownloadAction(item.episode)}>
-                <Text
-                  style={[
-                    styles.downloadBtnText,
-                    item.isCompletedDownload && styles.downloadBtnTextDone,
-                  ]}>
-                  {item.downloadLabel}
+                style={styles.episodeInfo}
+                activeOpacity={0.7}
+                onPress={() => onOpenEpisodeDetails(item.episode)}>
+                <Text style={styles.episodeTitle} numberOfLines={2}>
+                  {item.episode.title}
                 </Text>
+                <Text style={styles.episodeMeta}>{item.metaText}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.queueBtn, item.isQueued && styles.queueBtnActive]}
-                onPress={() => onAddToQueue(item.episode)}>
-                <Text
-                  style={[
-                    styles.queueBtnText,
-                    item.isQueued && styles.queueBtnTextActive,
-                  ]}>
-                  {item.queueLabel}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.actionsCluster}>
+                <PlayPauseButton
+                  isPlaying={item.isCurrent && item.playLabel === 'PAUSE'}
+                  variant={item.isCurrent ? 'active' : 'default'}
+                  onPress={() => onPlayEpisode(item.episode)}
+                />
 
-              <TouchableOpacity
-                style={styles.playBtn}
-                onPress={() => onPlayEpisode(item.episode)}>
-                <Text style={styles.playBtnText}>{item.playLabel}</Text>
-              </TouchableOpacity>
+                <MoreOptionsButton
+                  onPress={() => setActiveMenuEpisode(item)}
+                />
+              </View>
             </View>
           </View>
         )}
@@ -124,7 +123,55 @@ export function PodcastDetailsPage({
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color={COLORS.primary} />
             </View>
+          ) : episodeRows.length < totalCount ? (
+            <View style={styles.loadMoreContainer}>
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={onLoadNextPage}
+                activeOpacity={0.7}>
+                <Text style={styles.loadMoreButtonText}>
+                  LOAD MORE ({episodeRows.length} OF {totalCount})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : episodeRows.length > 0 ? (
+            <View style={styles.endOfListContainer}>
+              <Text style={styles.endOfListText}>
+                All {totalCount} episodes loaded
+              </Text>
+            </View>
           ) : null
+        }
+      />
+
+      <ActionMenuModal
+        visible={Boolean(activeMenuEpisode)}
+        title={activeMenuEpisode?.episode.title}
+        onClose={() => setActiveMenuEpisode(null)}
+        closeLabel="CANCEL"
+        options={
+          activeMenuEpisode
+            ? [
+                {
+                  label: activeMenuEpisode.isQueued
+                    ? 'REMOVE FROM QUEUE'
+                    : 'ADD TO QUEUE',
+                  isActive: activeMenuEpisode.isQueued,
+                  onPress: () => {
+                    const ep = activeMenuEpisode.episode;
+                    onAddToQueue(ep);
+                  },
+                },
+                {
+                  label: downloadOptionLabel,
+                  isDone: activeMenuEpisode.isCompletedDownload,
+                  onPress: () => {
+                    const ep = activeMenuEpisode.episode;
+                    onDownloadAction(ep);
+                  },
+                },
+              ]
+            : []
         }
       />
     </ScreenContainer>
@@ -156,24 +203,29 @@ const styles = StyleSheet.create({
   episodeCount: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
   unsubscribeBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: 'rgba(244, 63, 94, 0.3)',
   },
   unsubscribeBtnText: {
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.accent,
+    letterSpacing: 0.5,
+  },
+  list: {
+    flex: 1,
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexGrow: 1,
   },
   episodeCard: {
     backgroundColor: COLORS.surface,
@@ -185,79 +237,60 @@ const styles = StyleSheet.create({
   },
   episodeCardActive: {
     borderColor: COLORS.primary,
+    backgroundColor: '#162338',
+  },
+  episodeCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   episodeInfo: {
-    marginBottom: 12,
+    flex: 1,
   },
   episodeTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: COLORS.textPrimary,
+    lineHeight: 19,
   },
   episodeMeta: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
-  episodeActions: {
+  actionsCluster: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
-  },
-  downloadBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 6,
-    backgroundColor: COLORS.surfaceElevated,
-  },
-  downloadBtnDone: {
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    borderWidth: 1,
-    borderColor: COLORS.success,
-  },
-  downloadBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  downloadBtnTextDone: {
-    color: COLORS.success,
-  },
-  queueBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 6,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  queueBtnActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-  },
-  queueBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  queueBtnTextActive: {
-    color: COLORS.primary,
-  },
-  playBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 6,
-    backgroundColor: COLORS.primary,
-  },
-  playBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.background,
   },
   footerLoader: {
     paddingVertical: 16,
     alignItems: 'center',
   },
+  loadMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  loadMoreButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  loadMoreButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  endOfListContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  endOfListText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
 });
-

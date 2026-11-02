@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StationList } from '@widgets/station-list';
 import { StationFiltersBar } from '@features/filter-stations';
 import { StreamRecoveryBanner } from '@features/stream-recovery';
-import { COLORS, ScreenContainer } from '@shared/ui';
+import { Banner, COLORS, ScreenContainer } from '@shared/ui';
 import { useRadioCatalogPage } from './model';
 
 export function RadioCatalogPage(): React.JSX.Element {
@@ -39,14 +39,12 @@ export function RadioCatalogPage(): React.JSX.Element {
       </View>
 
       {playbackError && (
-        <View style={styles.playbackErrorBanner}>
-          <Text style={styles.playbackErrorText}>{playbackError}</Text>
-          <TouchableOpacity
-            style={styles.dismissErrorBtn}
-            onPress={onDismissPlaybackError}>
-            <Text style={styles.dismissErrorBtnText}>DISMISS</Text>
-          </TouchableOpacity>
-        </View>
+        <Banner
+          message={playbackError}
+          variant="error"
+          onDismiss={onDismissPlaybackError}
+          style={styles.playbackErrorBanner}
+        />
       )}
 
       <StreamRecoveryBanner />
@@ -101,35 +99,15 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   playbackErrorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-  },
-  playbackErrorText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FDA4AF',
-    marginRight: 10,
-  },
-  dismissErrorBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: COLORS.accent,
-  },
-  dismissErrorBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    position: 'absolute',
+    top: 66,
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
   },
 });
-

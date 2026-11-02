@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -7,8 +7,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { COLORS, ScreenContainer } from '@shared/ui';
-import { useDownloadsPage } from './model';
+import {
+  ActionMenuModal,
+  ActionMenuOption,
+  Badge,
+  BadgeVariant,
+  COLORS,
+  EmptyState,
+  MoreOptionsButton,
+  PlayPauseButton,
+  ProgressBar,
+  ScreenContainer,
+} from '@shared/ui';
+import { DownloadItemViewModel, useDownloadsPage } from './model';
 
 export function DownloadsPage(): React.JSX.Element {
   const {
@@ -27,6 +38,51 @@ export function DownloadsPage(): React.JSX.Element {
     onDeleteDownload,
     onBrowsePodcasts,
   } = useDownloadsPage();
+
+  const [activeMenuDownload, setActiveMenuDownload] = useState<DownloadItemViewModel | null>(null);
+
+  const getMenuOptions = (item: DownloadItemViewModel): ActionMenuOption[] => {
+    const options: ActionMenuOption[] = [
+      {
+        label: item.isQueued ? 'REMOVE FROM QUEUE' : 'ADD TO QUEUE',
+        isActive: item.isQueued,
+        onPress: () => onToggleQueue(item.episode),
+      },
+    ];
+
+    if (item.status === 'downloading') {
+      options.push({
+        label: 'PAUSE DOWNLOAD',
+        onPress: () => onPauseDownload(item.episode.id),
+      });
+    } else if (item.status === 'paused' || item.status === 'failed') {
+      options.push({
+        label: 'RESUME DOWNLOAD',
+        onPress: () => onResumeDownload(item.episode.id),
+      });
+    }
+
+    options.push({
+      label: 'DELETE DOWNLOAD',
+      isDestructive: true,
+      onPress: () => onDeleteDownload(item.episode.id),
+    });
+
+    return options;
+  };
+
+  const getBadgeVariant = (status: DownloadItemViewModel['status']): BadgeVariant => {
+    switch (status) {
+      case 'completed':
+        return 'success';
+      case 'downloading':
+        return 'primary';
+      case 'failed':
+        return 'error';
+      default:
+        return 'default';
+    }
+  };
 
   return (
     <ScreenContainer>
@@ -55,11 +111,12 @@ export function DownloadsPage(): React.JSX.Element {
               <Text style={styles.storageStatValue}>{limitMegabytesLabel}</Text>
             </View>
           </View>
-          <View style={styles.storageTrack}>
-            <View
-              style={[styles.storageFill, { width: `${usageWidthPercent}%` }]}
-            />
-          </View>
+          <ProgressBar
+            progress={usageWidthPercent}
+            height={7}
+            borderRadius={4}
+            style={styles.storageProgressBar}
+          />
         </View>
       </View>
 
@@ -74,106 +131,77 @@ export function DownloadsPage(): React.JSX.Element {
             tintColor={COLORS.primary}
           />
         }
-        renderItem={({ item }) => (
-          <View style={[styles.card, item.isCurrent && styles.cardActive]}>
-            <View style={styles.cardTopRow}>
-              <View
-                style={[
-                  styles.statusBadge,
-                  item.status === 'completed' && styles.statusBadgeCompleted,
-                  item.status === 'downloading' && styles.statusBadgeDownloading,
-                  item.status === 'failed' && styles.statusBadgeFailed,
-                ]}>
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    item.status === 'completed' && styles.statusBadgeTextCompleted,
-                    item.status === 'downloading' && styles.statusBadgeTextDownloading,
-                    item.status === 'failed' && styles.statusBadgeTextFailed,
-                  ]}>
-                  {item.statusBadgeText}
-                </Text>
+        renderItem={({ item }) => {
+          const isItemActivePlaying =
+            item.isCurrent && item.playButtonLabel === 'PAUSE';
+          const isItemDownloading = item.status === 'downloading';
+
+          return (
+            <View style={[styles.card, item.isCurrent && styles.cardActive]}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.cardHeaderInfo}>
+                  <View style={styles.cardTopRow}>
+                    <Badge
+                      text={item.statusBadgeText}
+                      variant={getBadgeVariant(item.status)}
+                    />
+                    <Text style={styles.metaText}>{item.metaText}</Text>
+                  </View>
+
+                  <Text style={styles.episodeTitle} numberOfLines={2}>
+                    {item.episode.title}
+                  </Text>
+                </View>
+
+                <View style={styles.actionsCluster}>
+                  <PlayPauseButton
+                    isPlaying={isItemDownloading || isItemActivePlaying}
+                    variant={isItemActivePlaying ? 'active' : 'default'}
+                    onPress={() => {
+                      if (item.status === 'downloading') {
+                        onPauseDownload(item.episode.id);
+                      } else if (item.status === 'paused' || item.status === 'failed') {
+                        onResumeDownload(item.episode.id);
+                      } else {
+                        onPlayOffline(item.episode);
+                      }
+                    }}
+                  />
+
+                  <MoreOptionsButton
+                    onPress={() => setActiveMenuDownload(item)}
+                  />
+                </View>
               </View>
-              <Text style={styles.metaText}>{item.metaText}</Text>
-            </View>
 
-            <Text style={styles.episodeTitle} numberOfLines={2}>
-              {item.episode.title}
-            </Text>
-
-            {item.status !== 'completed' && (
-              <View style={styles.itemProgressTrack}>
-                <View
-                  style={[
-                    styles.itemProgressFill,
-                    { width: `${item.progressPercent}%` },
-                  ]}
+              {item.status !== 'completed' && (
+                <ProgressBar
+                  progress={item.progressPercent}
+                  height={5}
+                  borderRadius={3}
+                  style={styles.itemProgressBar}
                 />
-              </View>
-            )}
-
-            <View style={styles.actionsRow}>
-              <TouchableOpacity
-                style={[styles.queueBtn, item.isQueued && styles.queueBtnActive]}
-                onPress={() => onToggleQueue(item.episode)}>
-                <Text
-                  style={[
-                    styles.queueBtnText,
-                    item.isQueued && styles.queueBtnTextActive,
-                  ]}>
-                  {item.queueButtonLabel}
-                </Text>
-              </TouchableOpacity>
-
-              {item.status === 'downloading' && (
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={() => onPauseDownload(item.episode.id)}>
-                  <Text style={styles.secondaryBtnText}>PAUSE</Text>
-                </TouchableOpacity>
               )}
-
-              {(item.status === 'paused' || item.status === 'failed') && (
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={() => onResumeDownload(item.episode.id)}>
-                  <Text style={styles.primaryBtnText}>RESUME (RANGE)</Text>
-                </TouchableOpacity>
-              )}
-
-              {item.status === 'completed' && (
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={() => onPlayOffline(item.episode)}>
-                  <Text style={styles.primaryBtnText}>{item.playButtonLabel}</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => onDeleteDownload(item.episode.id)}>
-                <Text style={styles.deleteBtnText}>DELETE</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIconCircle}>
-              <Text style={styles.emptyIconText}>↓</Text>
-            </View>
-            <Text style={styles.emptyTitle}>No Offline Episodes Yet</Text>
-            <Text style={styles.emptyText}>
-              Subscribe to a podcast and tap DOWNLOAD on any episode to cache it for
-              offline listening with HTTP Range resume support.
-            </Text>
-            <TouchableOpacity
-              style={styles.browsePodcastsBtn}
-              onPress={onBrowsePodcasts}>
-              <Text style={styles.browsePodcastsBtnText}>BROWSE PODCASTS</Text>
-            </TouchableOpacity>
-          </View>
+          <EmptyState
+            iconText="↓"
+            title="No Offline Episodes Yet"
+            message="Subscribe to a podcast and tap DOWNLOAD on any episode to cache it for offline listening with HTTP Range resume support."
+            actionLabel="BROWSE PODCASTS"
+            onAction={onBrowsePodcasts}
+          />
         }
+      />
+
+      <ActionMenuModal
+        visible={Boolean(activeMenuDownload)}
+        title={activeMenuDownload?.episode.title}
+        onClose={() => setActiveMenuDownload(null)}
+        closeLabel="CANCEL"
+        options={activeMenuDownload ? getMenuOptions(activeMenuDownload) : []}
       />
     </ScreenContainer>
   );
@@ -244,15 +272,8 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginTop: 2,
   },
-  storageTrack: {
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.surfaceElevated,
-    overflow: 'hidden',
-  },
-  storageFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
+  storageProgressBar: {
+    marginTop: 2,
   },
   listContent: {
     padding: 16,
@@ -277,35 +298,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: COLORS.surfaceElevated,
-  },
-  statusBadgeCompleted: {
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-  },
-  statusBadgeDownloading: {
-    backgroundColor: 'rgba(56, 189, 248, 0.16)',
-  },
-  statusBadgeFailed: {
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
-  },
-  statusBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  statusBadgeTextCompleted: {
-    color: COLORS.success,
-  },
-  statusBadgeTextDownloading: {
-    color: COLORS.primary,
-  },
-  statusBadgeTextFailed: {
-    color: COLORS.accent,
-  },
   episodeTitle: {
     fontSize: 15,
     fontWeight: '700',
@@ -317,122 +309,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
-  itemProgressTrack: {
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.surfaceElevated,
-    overflow: 'hidden',
+  itemProgressBar: {
     marginTop: 10,
   },
-  itemProgressFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-  },
-  actionsRow: {
+  cardHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  queueBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  queueBtnActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-  },
-  queueBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  queueBtnTextActive: {
-    color: COLORS.primary,
-  },
-  primaryBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
-  },
-  primaryBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.background,
-  },
-  secondaryBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceElevated,
-  },
-  secondaryBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  deleteBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: 'rgba(244, 63, 94, 0.16)',
-  },
-  deleteBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.accent,
-  },
-  emptyBox: {
+  cardHeaderInfo: {
     flex: 1,
+    marginRight: 12,
+  },
+  actionsCluster: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  emptyIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyIconText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  browsePodcastsBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-  },
-  browsePodcastsBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.background,
+    gap: 8,
   },
 });
-
