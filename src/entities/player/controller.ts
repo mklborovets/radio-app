@@ -10,7 +10,7 @@ import TrackPlayer, {
 } from 'react-native-track-player';
 import { Q } from '@nozbe/watermelondb';
 import { database, TableName, EpisodeModel } from '@shared/db';
-import { fetchWithTimeout } from '@shared/api';
+import { fetchTextWithTimeout } from '@shared/api';
 import { sanitizeImageUrl } from '@shared/lib';
 import { flushEpisodePlaybackProgress } from '@entities/episode';
 import { useStationFilterStore } from '@features/filter-stations';
@@ -19,6 +19,10 @@ import { PlayableTrack, PlaybackSpeed, usePlayerStore } from './store';
 let isPlayerInitialized = false;
 let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 const triedFallbackTrackIds = new Set<string>();
+let playRequestCounter = 0;
+let lastFailureHandledAt = 0;
+let lastFailureTrackId: string | null = null;
+const FAILURE_DEDUP_WINDOW_MS = 1500;
 
 export function clearStreamWatchdog(): void {
   if (streamWatchdogTimer !== null) {
@@ -91,7 +95,7 @@ async function resolvePlaylistStreamUrl(rawUrl: string): Promise<string> {
   }
 
   try {
-    const response = await fetchWithTimeout(
+    const body = await fetchTextWithTimeout(
       trimmed,
       {
         method: 'GET',
@@ -101,23 +105,23 @@ async function resolvePlaylistStreamUrl(rawUrl: string): Promise<string> {
       },
       8000,
     );
-    const body = await response.text();
     const lines = body
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
     for (const line of lines) {
-      const lowerLine = line.toLowerCase();
-      if (lowerLine.startsWith('file') || lowerLine.startsWith('ref') || lowerLine.includes('href=')) {
-        const eqIndex = line.indexOf('=');
-        if (eqIndex > 0) {
-          const candidate = line.slice(eqIndex + 1).replace(/["']/g, '').trim();
-          if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
-            return candidate;
-          }
+      const hrefMatch = line.match(/href\s*=\s*["']([^"']+)["']/i);
+      if (hrefMatch && /^https?:\/\//i.test(hrefMatch[1])) {
+        return hrefMatch[1];
+      }
+      const keyValueMatch = line.match(/^(?:file|ref)\d*\s*=\s*(\S.*)$/i);
+      if (keyValueMatch) {
+        const candidate = keyValueMatch[1].replace(/["']/g, '').trim();
+        if (/^https?:\/\//i.test(candidate)) {
+          return candidate;
         }
-      } else if (line.startsWith('http://') || line.startsWith('https://')) {
+      } else if (/^https?:\/\//i.test(line)) {
         return line;
       }
     }
@@ -304,6 +308,16 @@ export async function handleTrackPlaybackFailure(reason?: string): Promise<void>
     return;
   }
 
+  const failureNow = Date.now();
+  if (
+    lastFailureTrackId === active.id &&
+    failureNow - lastFailureHandledAt < FAILURE_DEDUP_WINDOW_MS
+  ) {
+    return;
+  }
+  lastFailureTrackId = active.id;
+  lastFailureHandledAt = failureNow;
+
   if (
     active.fallbackStreamUrl &&
     active.fallbackStreamUrl !== active.streamOrFileUrl &&
@@ -337,8 +351,14 @@ export async function startPlayableTrack(
   initialPositionSeconds = 0,
 ): Promise<void> {
   clearStreamWatchdog();
+  playRequestCounter += 1;
+  const requestId = playRequestCounter;
+  const isStale = (): boolean => requestId !== playRequestCounter;
   triedFallbackTrackIds.delete(playable.id);
   await ensureTrackPlayerInitialized();
+  if (isStale()) {
+    return;
+  }
 
   const store = usePlayerStore.getState();
   const previousActive = store.activeTrack;
@@ -353,6 +373,9 @@ export async function startPlayableTrack(
       store.positionSeconds,
       store.durationSeconds || previousActive.duration,
     ).catch(() => {});
+    if (isStale()) {
+      return;
+    }
   }
 
   store.setPlaybackError(null);
@@ -363,6 +386,9 @@ export async function startPlayableTrack(
     playable.sourceType === 'radio'
       ? await resolvePlaylistStreamUrl(playable.streamOrFileUrl)
       : playable.streamOrFileUrl;
+  if (isStale()) {
+    return;
+  }
 
   const resolvedPlayable: PlayableTrack = {
     ...playable,
@@ -371,7 +397,7 @@ export async function startPlayableTrack(
 
   store.setActiveTrack(resolvedPlayable);
 
-  const currentQueue = store.queue;
+  const currentQueue = usePlayerStore.getState().queue;
   const matchIndex = currentQueue.findIndex((item) => item.id === resolvedPlayable.id);
   let nextQueue: PlayableTrack[];
 
@@ -397,6 +423,9 @@ export async function startPlayableTrack(
         const filtered = moreEpisodes.filter((item) => !existingIds.has(item.id));
         nextQueue = [...nextQueue, ...filtered];
       }
+    }
+    if (isStale()) {
+      return;
     }
     store.setQueue(nextQueue);
   } else {
@@ -428,14 +457,23 @@ export async function startPlayableTrack(
         item.id !== resolvedPlayable.episodeId,
     );
 
+    if (isStale()) {
+      return;
+    }
     nextQueue = [...userTracks, ...filteredContext];
     store.setQueue(nextQueue);
   }
 
   try {
     await TrackPlayer.reset();
+    if (isStale()) {
+      return;
+    }
     const currentTrackNative = mapPlayableTrackToNativeTrack(resolvedPlayable);
     await TrackPlayer.add([currentTrackNative]);
+    if (isStale()) {
+      return;
+    }
 
     if (resolvedPlayable.sourceType === 'episode' && initialPositionSeconds > 0) {
       await TrackPlayer.seekTo(initialPositionSeconds);
@@ -445,13 +483,19 @@ export async function startPlayableTrack(
     }
 
     if (resolvedPlayable.sourceType === 'episode') {
-      await TrackPlayer.setRate(store.playbackSpeed);
+      await TrackPlayer.setRate(usePlayerStore.getState().playbackSpeed);
     } else {
       await TrackPlayer.setRate(1.0);
     }
 
     await TrackPlayer.setVolume(1.0);
+    if (isStale()) {
+      return;
+    }
     await TrackPlayer.play();
+    if (isStale()) {
+      return;
+    }
     store.setIsPlaying(true);
 
     if (resolvedPlayable.sourceType === 'radio') {
@@ -470,6 +514,9 @@ export async function startPlayableTrack(
       }, 25000);
     }
   } catch (error) {
+    if (isStale()) {
+      return;
+    }
     const message = error instanceof Error ? error.message : 'stream load error';
     await handleTrackPlaybackFailure(message);
   }
@@ -727,48 +774,15 @@ export async function reorderPlaybackQueue(
   const [movedItem] = reordered.splice(fromIndex, 1);
   reordered.splice(toIndex, 0, movedItem);
   store.setQueue(reordered);
-
-  await ensureTrackPlayerInitialized();
-  try {
-    await TrackPlayer.move(fromIndex, toIndex);
-  } catch {
-    return;
-  }
 }
 
 export async function removeTrackFromPlaybackQueue(trackId: string): Promise<void> {
   const store = usePlayerStore.getState();
-  const index = store.queue.findIndex((item) => item.id === trackId);
-  if (index < 0) {
+  if (!store.queue.some((item) => item.id === trackId)) {
     return;
   }
 
-  const isRemovingActive = store.activeTrack?.id === trackId;
-  const nextQueue = store.queue.filter((item) => item.id !== trackId);
-  store.setQueue(nextQueue);
-
-  await ensureTrackPlayerInitialized();
-
-  if (nextQueue.length === 0) {
-    clearStreamWatchdog();
-    await TrackPlayer.reset();
-    store.setActiveTrack(null);
-    store.setIsPlaying(false);
-    store.setIsBuffering(false);
-    return;
-  }
-
-  if (isRemovingActive) {
-    const nextActiveIndex = Math.min(index, nextQueue.length - 1);
-    const nextActive = nextQueue[nextActiveIndex];
-    await startPlayableTrack(nextActive, 0);
-  } else {
-    try {
-      await TrackPlayer.remove(index);
-    } catch {
-      return;
-    }
-  }
+  store.setQueue(store.queue.filter((item) => item.id !== trackId));
 }
 
 export async function clearPlaybackQueue(): Promise<void> {
