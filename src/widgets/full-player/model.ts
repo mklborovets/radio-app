@@ -6,7 +6,6 @@ import {
   View,
 } from 'react-native';
 import {
-  getPlaybackVolume,
   PlayableTrack,
   seekToPositionSeconds,
   setPlaybackVolume,
@@ -80,8 +79,8 @@ export function useFullPlayer(): UseFullPlayerResult {
     episodeId ? state.tasks[episodeId] : undefined,
   );
 
-  const [volume, setVolumeState] = useState<number>(1);
-  const previousVolumeRef = useRef<number>(1);
+  const volume = usePlayerStore((state) => state.volume);
+  const previousVolumeRef = useRef<number>(volume > 0 ? volume : 0.8);
 
   const stationUuid = isRadio ? activeTrack?.id : null;
   const [isFavoriteInDb, setIsFavoriteInDb] = useState<boolean>(false);
@@ -154,26 +153,8 @@ export function useFullPlayer(): UseFullPlayerResult {
     });
   }, [activeTrack, isRadio, isStationFavorite]);
 
-  useEffect(() => {
-    let isMounted = true;
-    getPlaybackVolume()
-      .then((vol) => {
-        if (isMounted && typeof vol === 'number') {
-          setVolumeState(vol);
-          if (vol > 0) {
-            previousVolumeRef.current = vol;
-          }
-        }
-      })
-      .catch(() => {});
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const onChangeVolume = useCallback((val: number) => {
     const clamped = Math.max(0, Math.min(1, val));
-    setVolumeState(clamped);
     if (clamped > 0) {
       previousVolumeRef.current = clamped;
     }
@@ -183,12 +164,10 @@ export function useFullPlayer(): UseFullPlayerResult {
   const onToggleMute = useCallback(() => {
     if (volume > 0) {
       previousVolumeRef.current = volume;
-      setVolumeState(0);
       setPlaybackVolume(0).catch(() => {});
     } else {
       const restore =
         previousVolumeRef.current > 0 ? previousVolumeRef.current : 0.8;
-      setVolumeState(restore);
       setPlaybackVolume(restore).catch(() => {});
     }
   }, [volume]);

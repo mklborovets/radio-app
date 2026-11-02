@@ -195,6 +195,18 @@ async function initializeTrackPlayer(): Promise<void> {
   });
 
   await TrackPlayer.setRepeatMode(RepeatMode.Off);
+
+  try {
+    const savedVolume = await database.localStorage.get<number>('playback_volume');
+    if (typeof savedVolume === 'number' && Number.isFinite(savedVolume)) {
+      const clamped = Math.max(0, Math.min(1, savedVolume));
+      usePlayerStore.getState().setVolume(clamped);
+      await TrackPlayer.setVolume(clamped);
+    }
+  } catch (error) {
+    logPlayerError('load saved volume', error);
+  }
+
   isPlayerInitialized = true;
 }
 
@@ -482,7 +494,7 @@ export async function startPlayableTrack(
       await TrackPlayer.setRate(1.0);
     }
 
-    await TrackPlayer.setVolume(1.0);
+    await TrackPlayer.setVolume(usePlayerStore.getState().volume);
     if (isStale()) {
       return;
     }
@@ -825,13 +837,16 @@ export async function clearPlaybackQueue(): Promise<void> {
 }
 
 export async function getPlaybackVolume(): Promise<number> {
-  await ensureTrackPlayerInitialized();
-  return TrackPlayer.getVolume();
+  return usePlayerStore.getState().volume;
 }
 
 export async function setPlaybackVolume(volume: number): Promise<void> {
-  await ensureTrackPlayerInitialized();
   const clamped = Math.max(0, Math.min(1, volume));
+  usePlayerStore.getState().setVolume(clamped);
+  await ensureTrackPlayerInitialized();
   await TrackPlayer.setVolume(clamped);
+  database.localStorage.set('playback_volume', clamped).catch((error) =>
+    logPlayerError('save volume', error),
+  );
 }
 

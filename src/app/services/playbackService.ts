@@ -154,7 +154,7 @@ export async function playbackService(): Promise<void> {
       return;
     }
 
-    await TrackPlayer.setVolume(1.0);
+    await TrackPlayer.setVolume(usePlayerStore.getState().volume);
     if (store.wasPlayingBeforeInterruption) {
       store.setWasPlayingBeforeInterruption(false);
       await resumePlayback();

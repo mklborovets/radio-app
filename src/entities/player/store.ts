@@ -32,6 +32,7 @@ export interface PlayerState {
   durationSeconds: number;
   playbackSpeed: PlaybackSpeed;
   queue: PlayableTrack[];
+  volume: number;
   sleepTimerTargetTimestamp: number | null;
   setActiveTrack: (track: PlayableTrack | null) => void;
   setIsPlaying: (isPlaying: boolean) => void;
@@ -41,6 +42,7 @@ export interface PlayerState {
   setProgress: (positionSeconds: number, durationSeconds: number) => void;
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
   setQueue: (queue: PlayableTrack[]) => void;
+  setVolume: (volume: number) => void;
   setSleepTimerTargetTimestamp: (timestamp: number | null) => void;
 }
 
@@ -54,6 +56,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   durationSeconds: 0,
   playbackSpeed: 1.0,
   queue: [],
+  volume: 1.0,
   sleepTimerTargetTimestamp: null,
   setActiveTrack: (activeTrack) => set({ activeTrack }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
@@ -65,6 +68,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     set({ positionSeconds, durationSeconds }),
   setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
   setQueue: (queue) => set({ queue }),
+  setVolume: (volume) => set({ volume }),
   setSleepTimerTargetTimestamp: (sleepTimerTargetTimestamp) =>
     set({ sleepTimerTargetTimestamp }),
 }));
