@@ -39,6 +39,9 @@ export const useDownloadManagerStore = create<DownloadManagerStoreState>((set) =
 
 const activeBlobTasks = new Map<string, StatefulPromise<FetchBlobResponse>>();
 const pausedByUserSet = new Set<string>();
+const downloadCompletedCallbacks = new Map<string, () => Promise<void> | void>();
+const pendingDownloadQueue: string[] = [];
+let currentDownloadingEpisodeId: string | null = null;
 let isCacheDirectoryInitialized = false;
 
 export function getEpisodesCacheDirectoryPath(): string {
@@ -155,7 +158,7 @@ async function updateEpisodeDownloadFieldsInDb(
   }
 }
 
-export async function startOrResumeEpisodeDownload(
+async function performEpisodeDownload(
   episodeId: string,
   onCompletedCallback?: () => Promise<void>,
 ): Promise<void> {
@@ -278,8 +281,10 @@ export async function startOrResumeEpisodeDownload(
       status: 'completed',
     });
 
-    if (onCompletedCallback) {
-      await onCompletedCallback();
+    const registeredCallback = downloadCompletedCallbacks.get(episodeId);
+    downloadCompletedCallbacks.delete(episodeId);
+    if (registeredCallback) {
+      await registeredCallback();
     }
   } catch {
     activeBlobTasks.delete(episodeId);
@@ -317,8 +322,73 @@ export async function startOrResumeEpisodeDownload(
   }
 }
 
+async function processNextInDownloadQueue(): Promise<void> {
+  if (currentDownloadingEpisodeId !== null) {
+    return;
+  }
+  const nextEpisodeId = pendingDownloadQueue.shift();
+  if (!nextEpisodeId) {
+    return;
+  }
+  currentDownloadingEpisodeId = nextEpisodeId;
+  try {
+    await performEpisodeDownload(nextEpisodeId);
+  } finally {
+    currentDownloadingEpisodeId = null;
+    processNextInDownloadQueue().catch(() => {});
+  }
+}
+
+export async function startOrResumeEpisodeDownload(
+  episodeId: string,
+  onCompleted?: () => Promise<void> | void,
+): Promise<void> {
+  if (onCompleted) {
+    downloadCompletedCallbacks.set(episodeId, onCompleted);
+  }
+  pausedByUserSet.delete(episodeId);
+  if (
+    currentDownloadingEpisodeId === episodeId ||
+    pendingDownloadQueue.includes(episodeId)
+  ) {
+    return;
+  }
+
+  const collection = database.get<EpisodeModel>(TableName.Episodes);
+  try {
+    const episode = await collection.find(episodeId);
+    const { partPath } = await getEpisodeFilePaths(episodeId, episode.audioUrl);
+    const existingPartBytes = await getSafeFileSize(partPath);
+    const knownTotalBytes = episode.fileSize > 0 ? episode.fileSize : 0;
+    const initialProgress =
+      knownTotalBytes > 0
+        ? Math.min(0.99, existingPartBytes / knownTotalBytes)
+        : 0;
+
+    useDownloadManagerStore.getState().setTaskInfo(episodeId, {
+      episodeId,
+      progress: initialProgress,
+      downloadedBytes: existingPartBytes,
+      totalBytes: knownTotalBytes,
+      status: 'downloading',
+    });
+    await updateEpisodeDownloadFieldsInDb(episodeId, {
+      status: 'downloading',
+      progress: initialProgress,
+      downloadedBytes: existingPartBytes,
+    });
+  } catch {}
+
+  pendingDownloadQueue.push(episodeId);
+  processNextInDownloadQueue().catch(() => {});
+}
+
 export async function pauseEpisodeDownload(episodeId: string): Promise<void> {
   pausedByUserSet.add(episodeId);
+  const queueIdx = pendingDownloadQueue.indexOf(episodeId);
+  if (queueIdx >= 0) {
+    pendingDownloadQueue.splice(queueIdx, 1);
+  }
   const runningTask = activeBlobTasks.get(episodeId);
   if (runningTask) {
     runningTask.cancel();
@@ -328,6 +398,10 @@ export async function pauseEpisodeDownload(episodeId: string): Promise<void> {
 
 export async function deleteEpisodeDownloadedFiles(episodeId: string): Promise<void> {
   pausedByUserSet.delete(episodeId);
+  const queueIdx = pendingDownloadQueue.indexOf(episodeId);
+  if (queueIdx >= 0) {
+    pendingDownloadQueue.splice(queueIdx, 1);
+  }
   const runningTask = activeBlobTasks.get(episodeId);
   if (runningTask) {
     runningTask.cancel();

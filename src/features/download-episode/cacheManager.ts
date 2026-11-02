@@ -114,7 +114,7 @@ export async function unsubscribeAndDeletePodcastCascade(
     } catch {}
 
     if (destroyOps.length > 0) {
-      await database.batch(...destroyOps);
+      await database.batch(destroyOps);
     }
   });
 }
