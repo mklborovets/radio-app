@@ -1,9 +1,3 @@
-export interface HttpResponse<TData> {
-  status: number;
-  headers: Record<string, string>;
-  data: TData;
-}
-
 export async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},

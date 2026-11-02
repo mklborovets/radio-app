@@ -128,8 +128,11 @@ export function useStreamRecoveryBanner(): UseStreamRecoveryBannerResult {
     (state) => state.setBatteryOptimizationIgnored,
   );
 
+  const isRadioActive = usePlayerStore(
+    (state) => state.activeTrack?.sourceType === 'radio',
+  );
   const showReconnectBanner =
-    phase === 'reconnecting' || phase === 'failed' || !isConnected;
+    isRadioActive && (phase === 'reconnecting' || phase === 'failed' || !isConnected);
   const showBatteryBanner = Platform.OS === 'android' && !isIgnoringBattery;
   const visible = showReconnectBanner || showBatteryBanner;
 

@@ -248,9 +248,4 @@ export async function playbackService(): Promise<void> {
       }
     }),
   );
-
-  TrackPlayer.addEventListener(
-    Event.PlaybackActiveTrackChanged,
-    async () => {},
-  );
 }
