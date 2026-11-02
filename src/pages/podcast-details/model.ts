@@ -24,7 +24,7 @@ import {
 import { formatTime } from '@shared/lib/formatTime';
 import { database, EpisodeModel, TableName } from '@shared/db';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 5;
 
 export function mapEpisodeToPlayableTrack(
   episode: EpisodeEntity,
@@ -71,12 +71,14 @@ export interface UsePodcastDetailsPageResult {
   onDownloadAction: (episode: EpisodeEntity) => void;
   onAddToQueue: (episode: EpisodeEntity) => void;
   onPlayEpisode: (episode: EpisodeEntity) => void;
+  onOpenEpisodeDetails: (episode: EpisodeEntity) => void;
 }
 
 export function usePodcastDetailsPage(
   podcastId: string,
   fallbackTitle: string,
   onNavigateBack: () => void,
+  onNavigateToPlayer?: () => void,
 ): UsePodcastDetailsPageResult {
   const [podcast, setPodcast] = useState<PodcastEntity | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeEntity[]>([]);
@@ -279,6 +281,16 @@ export function usePodcastDetailsPage(
     });
   }, [activeTrack?.id, downloadTasks, episodes, isPlaying, queue]);
 
+  const onOpenEpisodeDetails = useCallback(
+    async (episode: EpisodeEntity) => {
+      if (activeTrack?.id !== episode.id) {
+        await onPlayEpisode(episode);
+      }
+      onNavigateToPlayer?.();
+    },
+    [activeTrack?.id, onPlayEpisode, onNavigateToPlayer],
+  );
+
   return {
     headerTitle: podcast?.title ?? fallbackTitle,
     summarySubtitle: `${totalCount} episodes • Showing ${episodes.length}`,
@@ -291,5 +303,6 @@ export function usePodcastDetailsPage(
     onDownloadAction,
     onAddToQueue,
     onPlayEpisode,
+    onOpenEpisodeDetails,
   };
 }

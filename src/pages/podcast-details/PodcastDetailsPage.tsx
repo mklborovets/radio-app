@@ -34,10 +34,12 @@ export function PodcastDetailsPage({
     onDownloadAction,
     onAddToQueue,
     onPlayEpisode,
+    onOpenEpisodeDetails,
   } = usePodcastDetailsPage(
     route.params.podcastId,
     route.params.title,
     navigation.goBack,
+    () => navigation.navigate('PlayerModal'),
   );
 
   return (
@@ -71,12 +73,15 @@ export function PodcastDetailsPage({
         }
         renderItem={({ item }) => (
           <View style={[styles.episodeCard, item.isCurrent && styles.episodeCardActive]}>
-            <View style={styles.episodeInfo}>
+            <TouchableOpacity
+              style={styles.episodeInfo}
+              activeOpacity={0.7}
+              onPress={() => onOpenEpisodeDetails(item.episode)}>
               <Text style={styles.episodeTitle} numberOfLines={2}>
                 {item.episode.title}
               </Text>
               <Text style={styles.episodeMeta}>{item.metaText}</Text>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.episodeActions}>
               <TouchableOpacity

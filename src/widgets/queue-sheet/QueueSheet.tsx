@@ -1,90 +1,21 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+  Animated,
+  LayoutAnimation,
+  PanResponder,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  UIManager,
+  View,
+} from 'react-native';
 import { PlayableTrack } from '@entities/player';
 import { COLORS } from '@shared/ui';
-import { QUEUE_ROW_HEIGHT, useQueueRowDrag, useQueueSheet } from './model';
+import { QUEUE_ROW_HEIGHT, useQueueSheet } from './model';
 
-interface QueueRowProps {
-  track: PlayableTrack;
-  index: number;
-  totalCount: number;
-  isActive: boolean;
-  onSelect: (track: PlayableTrack) => void;
-  onMove: (fromIndex: number, toIndex: number) => void;
-  onRemove: (trackId: string) => void;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
-}
-
-function QueueRow({
-  track,
-  index,
-  totalCount,
-  isActive,
-  onSelect,
-  onMove,
-  onRemove,
-  onDragStart,
-  onDragEnd,
-}: QueueRowProps): React.JSX.Element {
-  const {
-    dragOffsetY,
-    isDragging,
-    canMoveUp,
-    canMoveDown,
-    panHandlers,
-    onMoveUp,
-    onMoveDown,
-  } = useQueueRowDrag(index, totalCount, onMove, onDragStart, onDragEnd);
-
-  return (
-    <View
-      style={[
-        styles.row,
-        isActive && styles.rowActive,
-        isDragging && styles.rowDragging,
-        isDragging && {
-          transform: [{ translateY: dragOffsetY }],
-        },
-      ]}>
-      <View
-        style={styles.dragHandle}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        {...panHandlers}>
-        <Text style={styles.dragHandleIcon}>:::</Text>
-      </View>
-
-      <TouchableOpacity
-        style={styles.trackInfo}
-        onPress={() => onSelect(track)}
-        activeOpacity={0.8}>
-        <Text style={styles.trackTitle} numberOfLines={1}>
-          {index + 1}. {track.title}
-        </Text>
-        <Text style={styles.trackSubtitle} numberOfLines={1}>
-          {track.sourceType === 'radio' ? 'RADIO' : 'EPISODE'} • {track.subtitle}
-        </Text>
-      </TouchableOpacity>
-
-      <View style={styles.rowActions}>
-        {canMoveUp && (
-          <TouchableOpacity style={styles.stepBtn} onPress={onMoveUp}>
-            <Text style={styles.stepBtnText}>UP</Text>
-          </TouchableOpacity>
-        )}
-        {canMoveDown && (
-          <TouchableOpacity style={styles.stepBtn} onPress={onMoveDown}>
-            <Text style={styles.stepBtnText}>DN</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.removeBtn}
-          onPress={() => onRemove(track.id)}>
-          <Text style={styles.removeBtnText}>X</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export interface QueueSheetProps {
@@ -105,12 +36,65 @@ export function QueueSheet({
     onClearQueue,
   } = useQueueSheet();
 
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const dragY = useRef(new Animated.Value(0)).current;
+  const draggingIdxRef = useRef<number | null>(null);
+  const hoverIdxRef = useRef<number | null>(null);
+
+  draggingIdxRef.current = draggingIdx;
+  hoverIdxRef.current = hoverIdx;
+
+  const createPanResponder = (rowIdx: number) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_evt, gestureState) =>
+        Math.abs(gestureState.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_evt, gestureState) =>
+        Math.abs(gestureState.dy) > 2,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        dragY.setValue(0);
+        setDraggingIdx(rowIdx);
+        setHoverIdx(rowIdx);
+        onDragStart?.();
+      },
+      onPanResponderMove: (_evt, gestureState) => {
+        dragY.setValue(gestureState.dy);
+        const shift = Math.round(gestureState.dy / QUEUE_ROW_HEIGHT);
+        const target = Math.max(0, Math.min(queue.length - 1, rowIdx + shift));
+        if (target !== hoverIdxRef.current) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setHoverIdx(target);
+        }
+      },
+      onPanResponderRelease: () => {
+        const from = draggingIdxRef.current;
+        const to = hoverIdxRef.current;
+        dragY.setValue(0);
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        onDragEnd?.();
+        if (from !== null && to !== null && from !== to) {
+          onMoveTrack(from, to);
+        }
+      },
+      onPanResponderTerminate: () => {
+        dragY.setValue(0);
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        onDragEnd?.();
+      },
+    });
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerTitleBox}>
           <Text style={styles.title}>Up Next Queue ({queue.length})</Text>
-          <Text style={styles.hint}>Drag ::: or use buttons to reorder</Text>
+          <Text style={styles.hint}>Drag ::: to reorder</Text>
         </View>
         {queue.length > 0 && (
           <TouchableOpacity
@@ -127,20 +111,74 @@ export function QueueSheet({
           Queue is empty. Tap &quot;+ QUEUE&quot; on any radio station or podcast episode to build your playlist.
         </Text>
       ) : (
-        queue.map((item, idx) => (
-          <QueueRow
-            key={item.id}
-            track={item}
-            index={idx}
-            totalCount={queue.length}
-            isActive={activeTrackId === item.id}
-            onSelect={onSelectTrack}
-            onMove={onMoveTrack}
-            onRemove={onRemoveTrack}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-          />
-        ))
+        queue.map((item, idx) => {
+          const isActive = activeTrackId === item.id;
+          const isDragging = draggingIdx === idx;
+          const panResponder = createPanResponder(idx);
+
+          const sourceLabel =
+            item.sourceType === 'radio'
+              ? 'RADIO'
+              : item.isAutoGenerated
+                ? 'UP NEXT'
+                : 'QUEUED';
+
+          let rowTransform: any[] = [];
+          if (isDragging) {
+            rowTransform = [{ translateY: dragY }];
+          } else if (draggingIdx !== null && hoverIdx !== null) {
+            let offset = 0;
+            if (draggingIdx < hoverIdx && idx > draggingIdx && idx <= hoverIdx) {
+              offset = -QUEUE_ROW_HEIGHT;
+            } else if (
+              draggingIdx > hoverIdx &&
+              idx < draggingIdx &&
+              idx >= hoverIdx
+            ) {
+              offset = QUEUE_ROW_HEIGHT;
+            }
+            if (offset !== 0) {
+              rowTransform = [{ translateY: offset }];
+            }
+          }
+
+          return (
+            <Animated.View
+              key={item.id}
+              style={[
+                styles.row,
+                isActive && styles.rowActive,
+                isDragging && styles.rowDragging,
+                rowTransform.length > 0 && { transform: rowTransform },
+              ]}>
+              <View
+                style={styles.dragHandle}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                {...panResponder.panHandlers}>
+                <Text style={styles.dragHandleIcon}>:::</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.trackInfo}
+                onPress={() => onSelectTrack(item)}
+                activeOpacity={0.8}>
+                <Text style={styles.trackTitle} numberOfLines={1}>
+                  {idx + 1}. {item.title}
+                </Text>
+                <Text style={styles.trackSubtitle} numberOfLines={1}>
+                  {sourceLabel} • {item.subtitle}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => onRemoveTrack(item.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.removeBtnText}>X</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          );
+        })
       )}
     </View>
   );
@@ -191,7 +229,7 @@ const styles = StyleSheet.create({
   },
   rowDragging: {
     zIndex: 999,
-    elevation: 8,
+    elevation: 12,
     borderColor: COLORS.primary,
     backgroundColor: '#1b263b',
     shadowColor: '#000',
@@ -243,35 +281,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
   },
-  rowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  stepBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 4,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
   removeBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 4,
-    backgroundColor: 'rgba(244, 63, 94, 0.2)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(244, 63, 94, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   removeBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: COLORS.accent,
   },
 });

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  GestureResponderEvent,
+  Animated,
   GestureResponderHandlers,
   PanResponder,
 } from 'react-native';
@@ -16,7 +16,7 @@ import {
 export const QUEUE_ROW_HEIGHT = 60;
 
 export interface UseQueueRowDragResult {
-  dragOffsetY: number;
+  dragOffsetY: Animated.Value;
   isDragging: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -32,7 +32,7 @@ export function useQueueRowDrag(
   onDragStart?: () => void,
   onDragEnd?: () => void,
 ): UseQueueRowDragResult {
-  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const dragOffsetY = useRef(new Animated.Value(0)).current;
   const [isDragging, setIsDragging] = useState(false);
   const startIndexRef = useRef(index);
   startIndexRef.current = index;
@@ -40,51 +40,48 @@ export function useQueueRowDrag(
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponder: () => true,
         onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: (
-          _evt: GestureResponderEvent,
-          gestureState,
-        ) => Math.abs(gestureState.dy) > 6,
-        onMoveShouldSetPanResponderCapture: (
-          _evt: GestureResponderEvent,
-          gestureState,
-        ) => Math.abs(gestureState.dy) > 6,
+        onMoveShouldSetPanResponder: (_evt, gestureState) =>
+          Math.abs(gestureState.dy) > 4,
+        onMoveShouldSetPanResponderCapture: (_evt, gestureState) =>
+          Math.abs(gestureState.dy) > 4,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
+          dragOffsetY.setValue(0);
           setIsDragging(true);
-          setDragOffsetY(0);
           onDragStart?.();
         },
-        onPanResponderMove: (_evt, gestureState) => {
-          setDragOffsetY(gestureState.dy);
-        },
+        onPanResponderMove: Animated.event([null, { dy: dragOffsetY }], {
+          useNativeDriver: false,
+        }),
         onPanResponderRelease: (_evt, gestureState) => {
           const dy = gestureState.dy;
-          let indexShift = 0;
-          if (dy > 20) {
-            indexShift = Math.max(1, Math.round(dy / QUEUE_ROW_HEIGHT));
-          } else if (dy < -20) {
-            indexShift = Math.min(-1, Math.round(dy / QUEUE_ROW_HEIGHT));
-          }
+          const indexShift = Math.round(dy / QUEUE_ROW_HEIGHT);
           const targetIndex = Math.max(
             0,
             Math.min(totalCount - 1, startIndexRef.current + indexShift),
           );
+          Animated.spring(dragOffsetY, {
+            toValue: 0,
+            useNativeDriver: false,
+          }).start();
           setIsDragging(false);
-          setDragOffsetY(0);
           onDragEnd?.();
           if (targetIndex !== startIndexRef.current) {
             onMove(startIndexRef.current, targetIndex);
           }
         },
         onPanResponderTerminate: () => {
+          Animated.spring(dragOffsetY, {
+            toValue: 0,
+            useNativeDriver: false,
+          }).start();
           setIsDragging(false);
-          setDragOffsetY(0);
           onDragEnd?.();
         },
       }),
-    [onDragEnd, onDragStart, onMove, totalCount],
+    [dragOffsetY, onDragEnd, onDragStart, onMove, totalCount],
   );
 
   const onMoveUp = useCallback(() => {

@@ -1,5 +1,12 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { COLORS } from '@shared/ui';
 import { useMiniPlayer } from './model';
 
@@ -13,13 +20,16 @@ export function MiniPlayer({
   const {
     activeTrack,
     isRadio,
+    isPlaying,
+    isBuffering,
     showProgressBar,
     progressWidthPercent,
     initials,
     subtitleText,
-    playButtonLabel,
     hasNextInQueue,
+    hasPreviousInQueue,
     onSkipBackward,
+    onSkipPrevious,
     onSkipNext,
     onTogglePlay,
   } = useMiniPlayer();
@@ -76,30 +86,40 @@ export function MiniPlayer({
         </View>
 
         <View style={styles.controlsRow}>
-          {!isRadio && (
+          {hasPreviousInQueue && (
             <TouchableOpacity
-              style={styles.skipButton}
-              onPress={onSkipBackward}
+              style={styles.navButton}
+              onPress={onSkipPrevious}
               hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
-              <Text style={styles.skipButtonText}>-30</Text>
-            </TouchableOpacity>
-          )}
-
-          {hasNextInQueue && (
-            <TouchableOpacity
-              style={styles.skipButton}
-              onPress={onSkipNext}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
-              <Text style={styles.skipButtonText}>NEXT</Text>
+              <Text style={styles.navIcon}>◀◀</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
             style={styles.playButton}
             onPress={onTogglePlay}
+            activeOpacity={0.85}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
-            <Text style={styles.playButtonText}>{playButtonLabel}</Text>
+            {isBuffering ? (
+              <ActivityIndicator size="small" color={COLORS.background} />
+            ) : isPlaying ? (
+              <View style={styles.pauseIconContainer}>
+                <View style={styles.pauseBar} />
+                <View style={styles.pauseBar} />
+              </View>
+            ) : (
+              <Text style={[styles.playIcon, styles.playIconOffset]}>▶</Text>
+            )}
           </TouchableOpacity>
+
+          {hasNextInQueue && (
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={onSkipNext}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+              <Text style={styles.navIcon}>▶▶</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     </View>
@@ -196,34 +216,48 @@ const styles = StyleSheet.create({
     gap: 8,
     flexShrink: 0,
   },
-  skipButton: {
+  navButton: {
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  skipButtonText: {
-    fontSize: 12,
+  navIcon: {
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
   playButton: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 58,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playButtonText: {
-    fontSize: 11,
-    fontWeight: '700',
+  playIcon: {
+    fontSize: 18,
+    fontWeight: '800',
     color: COLORS.background,
+  },
+  playIconOffset: {
+    marginLeft: 2,
+  },
+  pauseIconContainer: {
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pauseBar: {
+    width: 3,
+    height: 14,
+    borderRadius: 1.5,
+    backgroundColor: COLORS.background,
   },
 });
 

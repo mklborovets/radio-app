@@ -31,6 +31,7 @@ export interface UsePlaybackControlsResult {
 }
 
 export function usePlaybackControls(): UsePlaybackControlsResult {
+  const activeTrack = usePlayerStore((state) => state.activeTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const isBuffering = usePlayerStore((state) => state.isBuffering);
   const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
@@ -73,7 +74,7 @@ export function usePlaybackControls(): UsePlaybackControlsResult {
   }));
 
   return {
-    hasMultipleTracks: queueLength > 1,
+    hasMultipleTracks: Boolean(activeTrack),
     isPlaying,
     isBuffering,
     primaryButtonLabel,

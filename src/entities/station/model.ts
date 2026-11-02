@@ -61,8 +61,12 @@ export function mapDtoToRadioStation(
 
   const resolved = (dto.url_resolved || '').trim();
   const original = (dto.url || '').trim();
-  const primaryUrl = resolved || original;
-  const fallbackUrl = original && original !== primaryUrl ? original : '';
+  let primaryUrl = resolved || original;
+  let fallbackUrl = original && original !== primaryUrl ? original : '';
+  if (resolved.includes('tvstitch.com') && original && !original.includes('tvstitch.com')) {
+    primaryUrl = original;
+    fallbackUrl = resolved;
+  }
 
   return {
     stationUuid: dto.stationuuid,

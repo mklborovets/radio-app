@@ -3,6 +3,7 @@ import {
   PlayableTrack,
   seekRelativeSeconds,
   skipToNextInQueue,
+  skipToPreviousInQueue,
   togglePlaybackState,
   usePlayerStore,
 } from '@entities/player';
@@ -12,6 +13,8 @@ export interface UseMiniPlayerResult {
   activeTrack: PlayableTrack | null;
   playbackError: string | null;
   isRadio: boolean;
+  isPlaying: boolean;
+  isBuffering: boolean;
   showProgressBar: boolean;
   progressWidthPercent: number;
   initials: string;
@@ -19,7 +22,9 @@ export interface UseMiniPlayerResult {
   playButtonLabel: string;
   queueBadgeLabel: string;
   hasNextInQueue: boolean;
+  hasPreviousInQueue: boolean;
   onSkipBackward: () => void;
+  onSkipPrevious: () => void;
   onSkipNext: () => void;
   onTogglePlay: () => void;
   onDismissError: () => void;
@@ -39,6 +44,10 @@ export function useMiniPlayer(): UseMiniPlayerResult {
     seekRelativeSeconds(-30).catch(() => {});
   }, []);
 
+  const onSkipPrevious = useCallback(() => {
+    skipToPreviousInQueue().catch(() => {});
+  }, []);
+
   const onSkipNext = useCallback(() => {
     skipToNextInQueue().catch(() => {});
   }, []);
@@ -56,14 +65,18 @@ export function useMiniPlayer(): UseMiniPlayerResult {
       activeTrack: null,
       playbackError,
       isRadio: false,
+      isPlaying: false,
+      isBuffering: false,
       showProgressBar: false,
       progressWidthPercent: 0,
       initials: '',
       subtitleText: '',
       playButtonLabel: 'PLAY',
       queueBadgeLabel: `Q (${queue.length})`,
-      hasNextInQueue: queue.length > 1,
+      hasNextInQueue: queue.length > 0,
+      hasPreviousInQueue: false,
       onSkipBackward,
+      onSkipPrevious,
       onSkipNext,
       onTogglePlay,
       onDismissError,
@@ -92,14 +105,18 @@ export function useMiniPlayer(): UseMiniPlayerResult {
     activeTrack,
     playbackError,
     isRadio,
+    isPlaying,
+    isBuffering,
     showProgressBar,
     progressWidthPercent: progressRatio * 100,
     initials: activeTrack.title.slice(0, 2).toUpperCase(),
     subtitleText,
     playButtonLabel,
     queueBadgeLabel: `QUEUE (${queue.length})`,
-    hasNextInQueue: queue.length > 1,
+    hasNextInQueue: true,
+    hasPreviousInQueue: true,
     onSkipBackward,
+    onSkipPrevious,
     onSkipNext,
     onTogglePlay,
     onDismissError,
