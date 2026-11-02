@@ -1,6 +1,19 @@
 {
   "extends": "@react-native/typescript-config/tsconfig.json",
   "compilerOptions": {
+    "target": "esnext",
+    "module": "es2015",
+    "jsx": "react-native",
+    "moduleResolution": "bundler",
+    "customConditions": ["react-native"],
+    "allowImportingTsExtensions": true,
+    "allowArbitraryExtensions": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -13,12 +26,13 @@
     "emitDecoratorMetadata": false,
     "baseUrl": ".",
     "paths": {
-      "@app/*": ["src/app/*"],
-      "@pages/*": ["src/pages/*"],
-      "@widgets/*": ["src/widgets/*"],
-      "@features/*": ["src/features/*"],
-      "@entities/*": ["src/entities/*"],
-      "@shared/*": ["src/shared/*"]
+      "@app": ["src/app/index.ts"],
+      "@app/*": ["src/app/*", "src/app/*/index.ts", "src/app/*/index.tsx"],
+      "@pages/*": ["src/pages/*", "src/pages/*/index.ts", "src/pages/*/index.tsx"],
+      "@widgets/*": ["src/widgets/*", "src/widgets/*/index.ts", "src/widgets/*/index.tsx"],
+      "@features/*": ["src/features/*", "src/features/*/index.ts", "src/features/*/index.tsx"],
+      "@entities/*": ["src/entities/*", "src/entities/*/index.ts", "src/entities/*/index.tsx"],
+      "@shared/*": ["src/shared/*", "src/shared/*/index.ts", "src/shared/*/index.tsx"]
     }
   },
   "include": ["src/**/*", "App.tsx", "index.js", "__tests__/**/*"],

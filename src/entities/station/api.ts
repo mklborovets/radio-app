@@ -13,6 +13,9 @@ function isValidStationDto(value: unknown): value is RadioBrowserStationDto {
     return false;
   }
   const candidate = value as Record<string, unknown>;
+  if (candidate.lastcheckok === 0) {
+    return false;
+  }
   return (
     typeof candidate.stationuuid === 'string' &&
     typeof candidate.name === 'string' &&
@@ -84,4 +87,3 @@ export async function fetchRadioStations(
 
   throw lastError ?? new Error('Unable to reach any Radio Browser API mirror');
 }
-

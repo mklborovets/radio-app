@@ -1,6 +1,7 @@
 import TrackPlayer, {
   Event,
   PlaybackActiveTrackChangedEvent,
+  PlaybackErrorEvent,
   PlaybackProgressUpdatedEvent,
   PlaybackState,
   RemoteDuckEvent,
@@ -10,6 +11,8 @@ import TrackPlayer, {
   State,
 } from 'react-native-track-player';
 import {
+  clearStreamWatchdog,
+  handleTrackPlaybackFailure,
   seekRelativeSeconds,
   seekToPositionSeconds,
   skipToNextInQueue,
@@ -119,21 +122,59 @@ export async function playbackService(): Promise<void> {
     Event.PlaybackState,
     async (playbackState: PlaybackState) => {
       const store = usePlayerStore.getState();
-      const isPlaying = playbackState.state === State.Playing;
-      const isBuffering =
+      if (playbackState.state === State.Error) {
+        const errorMessage = playbackState.error?.message || 'playback error';
+        await handleTrackPlaybackFailure(errorMessage);
+        return;
+      }
+
+      if (playbackState.state === State.Playing) {
+        clearStreamWatchdog();
+        store.setIsPlaying(true);
+        store.setIsBuffering(false);
+        store.setPlaybackError(null);
+      } else if (
         playbackState.state === State.Buffering ||
-        playbackState.state === State.Loading;
-
-      store.setIsPlaying(isPlaying);
-      store.setIsBuffering(isBuffering);
-
-      if (
+        playbackState.state === State.Loading
+      ) {
+        store.setIsBuffering(true);
+      } else if (playbackState.state === State.Ready) {
+        if (store.isPlaying || store.isBuffering) {
+          store.setIsPlaying(true);
+          store.setIsBuffering(false);
+          await TrackPlayer.play().catch(() => {});
+        }
+      } else if (
         playbackState.state === State.Paused ||
-        playbackState.state === State.Stopped ||
         playbackState.state === State.Ended
       ) {
+        clearStreamWatchdog();
+        store.setIsPlaying(false);
+        store.setIsBuffering(false);
         await flushCurrentEpisodeIfApplicable();
+      } else if (
+        playbackState.state === State.Stopped ||
+        playbackState.state === State.None
+      ) {
+        if (!store.isBuffering) {
+          clearStreamWatchdog();
+          store.setIsPlaying(false);
+          store.setIsBuffering(false);
+          await flushCurrentEpisodeIfApplicable();
+        }
       }
+    },
+  );
+
+  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
+    await flushCurrentEpisodeIfApplicable();
+    await skipToNextInQueue();
+  });
+
+  TrackPlayer.addEventListener(
+    Event.PlaybackError,
+    async (event: PlaybackErrorEvent) => {
+      await handleTrackPlaybackFailure(event.message || 'stream error');
     },
   );
 

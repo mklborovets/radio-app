@@ -8,6 +8,7 @@ export interface PlayableTrack {
   subtitle: string;
   artworkUrl: string;
   streamOrFileUrl: string;
+  fallbackStreamUrl?: string;
   sourceType: PlayableSourceType;
   duration: number;
   episodeId?: string;
@@ -24,6 +25,7 @@ export interface PlayerState {
   activeTrack: PlayableTrack | null;
   isPlaying: boolean;
   isBuffering: boolean;
+  playbackError: string | null;
   wasPlayingBeforeInterruption: boolean;
   positionSeconds: number;
   durationSeconds: number;
@@ -33,6 +35,7 @@ export interface PlayerState {
   setActiveTrack: (track: PlayableTrack | null) => void;
   setIsPlaying: (isPlaying: boolean) => void;
   setIsBuffering: (isBuffering: boolean) => void;
+  setPlaybackError: (error: string | null) => void;
   setWasPlayingBeforeInterruption: (wasPlaying: boolean) => void;
   setProgress: (positionSeconds: number, durationSeconds: number) => void;
   setPlaybackSpeed: (speed: PlaybackSpeed) => void;
@@ -44,6 +47,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   activeTrack: null,
   isPlaying: false,
   isBuffering: false,
+  playbackError: null,
   wasPlayingBeforeInterruption: false,
   positionSeconds: 0,
   durationSeconds: 0,
@@ -53,6 +57,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setActiveTrack: (activeTrack) => set({ activeTrack }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setIsBuffering: (isBuffering) => set({ isBuffering }),
+  setPlaybackError: (playbackError) => set({ playbackError }),
   setWasPlayingBeforeInterruption: (wasPlayingBeforeInterruption) =>
     set({ wasPlayingBeforeInterruption }),
   setProgress: (positionSeconds, durationSeconds) =>
@@ -62,4 +67,3 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setSleepTimerTargetTimestamp: (sleepTimerTargetTimestamp) =>
     set({ sleepTimerTargetTimestamp }),
 }));
-

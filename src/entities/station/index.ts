@@ -1,6 +1,7 @@
 export {
   getFavoriteStations,
   getFavoriteStationUuids,
+  getStationCardViewModel,
   mapDtoToRadioStation,
   mapFavoriteModelToRadioStation,
   toggleFavoriteStationInDb,
@@ -9,6 +10,7 @@ export type {
   RadioBrowserStationDto,
   RadioStation,
   SearchStationsParams,
+  StationCardViewModel,
 } from './model';
 export { fetchRadioStations } from './api';
 export { StationCard } from './StationCard';

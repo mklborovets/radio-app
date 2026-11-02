@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppRoot } from '@app/index';
+import { AppRoot } from '@app';
 
 function App(): React.JSX.Element {
   return <AppRoot />;

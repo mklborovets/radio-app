@@ -1,8 +1,6 @@
-import React, { createContext, PropsWithChildren, useContext } from 'react';
-import { Database } from '@nozbe/watermelondb';
+import React, { PropsWithChildren } from 'react';
 import { database } from '@shared/db';
-
-const DatabaseContext = createContext<Database>(database);
+import { DatabaseContext } from './model';
 
 export function DatabaseProvider({ children }: PropsWithChildren): React.JSX.Element {
   return (
@@ -11,8 +9,3 @@ export function DatabaseProvider({ children }: PropsWithChildren): React.JSX.Ele
     </DatabaseContext.Provider>
   );
 }
-
-export function useDatabase(): Database {
-  return useContext(DatabaseContext);
-}
-

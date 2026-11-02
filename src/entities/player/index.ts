@@ -11,7 +11,10 @@ export type {
 export {
   appendTrackToPlaybackQueue,
   changePlaybackSpeed,
+  clearPlaybackQueue,
+  clearStreamWatchdog,
   ensureTrackPlayerInitialized,
+  handleTrackPlaybackFailure,
   mapPlayableTrackToNativeTrack,
   removeTrackFromPlaybackQueue,
   reorderPlaybackQueue,

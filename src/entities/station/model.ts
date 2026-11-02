@@ -12,12 +12,14 @@ export interface RadioBrowserStationDto {
   tags: string;
   bitrate: number;
   codec: string;
+  lastcheckok?: number;
 }
 
 export interface RadioStation {
   stationUuid: string;
   name: string;
   streamUrl: string;
+  fallbackStreamUrl: string;
   faviconUrl: string;
   country: string;
   countryCode: string;
@@ -35,6 +37,17 @@ export interface SearchStationsParams {
   offset?: number;
 }
 
+export function sanitizeImageUrl(raw?: string | null): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === '' || lower === 'null' || lower === 'undefined') return '';
+  if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('file://')) {
+    return trimmed;
+  }
+  return '';
+}
+
 export function mapDtoToRadioStation(
   dto: RadioBrowserStationDto,
   favoriteUuids: ReadonlySet<string>,
@@ -46,11 +59,17 @@ export function mapDtoToRadioStation(
         .filter((item) => item.length > 0)
     : [];
 
+  const resolved = (dto.url_resolved || '').trim();
+  const original = (dto.url || '').trim();
+  const primaryUrl = resolved || original;
+  const fallbackUrl = original && original !== primaryUrl ? original : '';
+
   return {
     stationUuid: dto.stationuuid,
     name: dto.name.trim() || 'Unknown Station',
-    streamUrl: (dto.url_resolved || dto.url || '').trim(),
-    faviconUrl: (dto.favicon || '').trim(),
+    streamUrl: primaryUrl,
+    fallbackStreamUrl: fallbackUrl,
+    faviconUrl: sanitizeImageUrl(dto.favicon),
     country: (dto.country || '').trim(),
     countryCode: (dto.countrycode || '').trim().toUpperCase(),
     tags: parsedTags,
@@ -74,7 +93,8 @@ export function mapFavoriteModelToRadioStation(
     stationUuid: model.stationUuid,
     name: model.name,
     streamUrl: model.streamUrl,
-    faviconUrl: model.faviconUrl,
+    fallbackStreamUrl: '',
+    faviconUrl: sanitizeImageUrl(model.faviconUrl),
     country: model.country,
     countryCode: model.countryCode,
     tags: parsedTags,
@@ -124,3 +144,53 @@ export async function toggleFavoriteStationInDb(station: RadioStation): Promise<
   });
 }
 
+export interface StationCardViewModel {
+  initials: string;
+  metadataText: string;
+  tagsText: string | null;
+  favoriteLabel: string;
+  queueLabel: string;
+  playBadgeLabel: string;
+  isLivePlaying: boolean;
+  isConnecting: boolean;
+}
+
+export function getStationCardViewModel(
+  station: RadioStation,
+  isCurrentStation: boolean,
+  isPlaying: boolean,
+  isBuffering: boolean,
+  isQueued: boolean,
+): StationCardViewModel {
+  const metadataParts: string[] = [];
+  if (station.countryCode) {
+    metadataParts.push(station.countryCode);
+  }
+  if (station.codec) {
+    metadataParts.push(station.codec);
+  }
+  if (station.bitrate > 0) {
+    metadataParts.push(`${station.bitrate} kbps`);
+  }
+
+  const isConnecting = isCurrentStation && isBuffering;
+  const isLivePlaying = isCurrentStation && isPlaying && !isBuffering;
+
+  let playBadgeLabel = 'PLAY';
+  if (isConnecting) {
+    playBadgeLabel = 'WAIT...';
+  } else if (isLivePlaying) {
+    playBadgeLabel = 'PAUSE';
+  }
+
+  return {
+    initials: station.name.slice(0, 2).toUpperCase(),
+    metadataText: metadataParts.join(' • ') || 'Live Radio Stream',
+    tagsText: station.tags.length > 0 ? station.tags.slice(0, 3).join(' · ') : null,
+    favoriteLabel: station.isFavorite ? 'SAVED' : 'SAVE',
+    queueLabel: isQueued ? 'QUEUED' : '+ QUEUE',
+    playBadgeLabel,
+    isLivePlaying,
+    isConnecting,
+  };
+}

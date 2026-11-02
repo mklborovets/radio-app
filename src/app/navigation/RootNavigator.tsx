@@ -1,48 +1,32 @@
 import React from 'react';
-import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { NavigationContainer } from '@react-navigation/native';
 import { PodcastDetailsPage } from '@pages/podcast-details';
 import { PlayerModalPage } from '@pages/player-modal';
-import { RootStackParamList } from '@shared/config';
 import { COLORS } from '@shared/ui';
+import { navigationTheme, RootStack } from './model';
 import { TabNavigator } from './TabNavigator';
-
-const Stack = createNativeStackNavigator<RootStackParamList>();
-
-const navigationTheme: Theme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary: COLORS.primary,
-    background: COLORS.background,
-    card: COLORS.surface,
-    text: COLORS.textPrimary,
-    border: COLORS.border,
-    notification: COLORS.accent,
-  },
-};
 
 export function RootNavigator(): React.JSX.Element {
   return (
     <NavigationContainer theme={navigationTheme}>
-      <Stack.Navigator
+      <RootStack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: COLORS.surface },
           headerTintColor: COLORS.textPrimary,
           headerTitleStyle: { fontWeight: '700' },
           contentStyle: { backgroundColor: COLORS.background },
         }}>
-        <Stack.Screen
+        <RootStack.Screen
           name="MainTabs"
           component={TabNavigator}
           options={{ headerShown: false }}
         />
-        <Stack.Screen
+        <RootStack.Screen
           name="PodcastDetails"
           component={PodcastDetailsPage}
           options={({ route }) => ({ title: route.params.title })}
         />
-        <Stack.Screen
+        <RootStack.Screen
           name="PlayerModal"
           component={PlayerModalPage}
           options={{
@@ -50,8 +34,7 @@ export function RootNavigator(): React.JSX.Element {
             headerShown: false,
           }}
         />
-      </Stack.Navigator>
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }
-

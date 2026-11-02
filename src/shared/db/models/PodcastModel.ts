@@ -17,7 +17,7 @@ export class PodcastModel extends Model {
   @text('description') description!: string;
   @text('artwork_url') artworkUrl!: string;
   @field('etag') etag!: string | null;
-  @field('last_modified') lastModified!: string | null;
+  @field('http_last_modified') lastModified!: string | null;
   @field('subscribed_at') subscribedAt!: number;
   @field('updated_at') updatedAt!: number;
 

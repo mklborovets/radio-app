@@ -18,7 +18,7 @@ export const databaseSchema = appSchema({
         { name: 'description', type: 'string' },
         { name: 'artwork_url', type: 'string' },
         { name: 'etag', type: 'string', isOptional: true },
-        { name: 'last_modified', type: 'string', isOptional: true },
+        { name: 'http_last_modified', type: 'string', isOptional: true },
         { name: 'subscribed_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
