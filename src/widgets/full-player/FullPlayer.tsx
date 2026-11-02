@@ -65,7 +65,8 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         scrollEnabled={isScrollEnabled}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        canCancelContentTouches={false}>
 
       {activeTrack ? (
         <View style={styles.body}>

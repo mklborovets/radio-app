@@ -32,6 +32,8 @@ interface QueueRowItemProps {
   onStartDrag: (index: number) => void;
   onMoveDrag: (dy: number) => void;
   onEndDrag: () => void;
+  onMoveUp: (index: number) => void;
+  onMoveDown: (index: number) => void;
   onSelectTrack: (track: PlayableTrack) => void;
   onRemoveTrack: (trackId: string) => void;
 }
@@ -39,6 +41,7 @@ interface QueueRowItemProps {
 function QueueRowItem({
   item,
   index,
+  totalCount,
   isActive,
   isDragging,
   anyDragging,
@@ -48,6 +51,8 @@ function QueueRowItem({
   onStartDrag,
   onMoveDrag,
   onEndDrag,
+  onMoveUp,
+  onMoveDown,
   onSelectTrack,
   onRemoveTrack,
 }: QueueRowItemProps): React.JSX.Element {
@@ -55,12 +60,6 @@ function QueueRowItem({
 
   const indexRef = useRef(index);
   indexRef.current = index;
-
-  const isDraggingRef = useRef(isDragging);
-  isDraggingRef.current = isDragging;
-
-  const anyDraggingRef = useRef(anyDragging);
-  anyDraggingRef.current = anyDragging;
 
   const onStartDragRef = useRef(onStartDrag);
   onStartDragRef.current = onStartDrag;
@@ -72,12 +71,7 @@ function QueueRowItem({
   onEndDragRef.current = onEndDrag;
 
   useEffect(() => {
-    if (draggingIndex === null) {
-      offsetY.setValue(0);
-      return;
-    }
-
-    if (isDragging) {
+    if (draggingIndex === null || isDragging) {
       offsetY.setValue(0);
       return;
     }
@@ -93,24 +87,25 @@ function QueueRowItem({
 
     Animated.spring(offsetY, {
       toValue: targetOffset,
-      useNativeDriver: false,
-      friction: 8,
-      tension: 100,
+      useNativeDriver: true,
+      friction: 9,
+      tension: 120,
     }).start();
   }, [draggingIndex, hoverIndex, index, isDragging, offsetY]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !anyDraggingRef.current,
-      onStartShouldSetPanResponderCapture: () => !anyDraggingRef.current,
-      onMoveShouldSetPanResponder: () => isDraggingRef.current,
-      onMoveShouldSetPanResponderCapture: () => isDraggingRef.current,
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (_evt, gs) => Math.abs(gs.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_evt, gs) => Math.abs(gs.dy) > 2,
       onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: () => {
         onStartDragRef.current(indexRef.current);
       },
-      onPanResponderMove: (_evt, gestureState) => {
-        onMoveDragRef.current(gestureState.dy);
+      onPanResponderMove: (_evt, gs) => {
+        onMoveDragRef.current(gs.dy);
       },
       onPanResponderRelease: () => {
         onEndDragRef.current();
@@ -129,6 +124,8 @@ function QueueRowItem({
       : 'QUEUED';
 
   const currentTranslateY = isDragging ? dragY : offsetY;
+  const canMoveUp = index > 0;
+  const canMoveDown = index < totalCount - 1;
 
   return (
     <Animated.View
@@ -136,18 +133,18 @@ function QueueRowItem({
       style={[
         styles.row,
         isActive && styles.rowActive,
-        isDragging ? styles.rowDragging : styles.rowDefault,
+        isDragging && styles.rowDragging,
         {
           transform: [
             { translateY: currentTranslateY },
-            { scale: isDragging ? 1.03 : 1 },
+            { scale: isDragging ? 1.02 : 1 },
           ],
         },
       ]}>
       <View
         style={styles.dragHandle}
-        hitSlop={{ left: 8, right: 8 }}
-        {...(isDragging || !anyDragging ? panResponder.panHandlers : {})}>
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        {...panResponder.panHandlers}>
         <Text style={[styles.dragHandleIcon, isDragging && styles.dragHandleIconDragging]}>
           :::
         </Text>
@@ -165,6 +162,28 @@ function QueueRowItem({
           {sourceLabel} • {item.subtitle}
         </Text>
       </TouchableOpacity>
+
+      <View style={styles.reorderActions}>
+        <TouchableOpacity
+          style={[styles.reorderBtn, !canMoveUp && styles.reorderBtnDisabled]}
+          onPress={() => onMoveUp(index)}
+          disabled={!canMoveUp || anyDragging}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={[styles.reorderBtnText, !canMoveUp && styles.reorderBtnTextDisabled]}>
+            ▲
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.reorderBtn, !canMoveDown && styles.reorderBtnDisabled]}
+          onPress={() => onMoveDown(index)}
+          disabled={!canMoveDown || anyDragging}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={[styles.reorderBtnText, !canMoveDown && styles.reorderBtnTextDisabled]}>
+            ▼
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={styles.removeBtn}
@@ -240,6 +259,18 @@ export function QueueSheet({
     }
   };
 
+  const handleMoveUp = (index: number) => {
+    if (index > 0) {
+      onMoveTrack(index, index - 1);
+    }
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index < queue.length - 1) {
+      onMoveTrack(index, index + 1);
+    }
+  };
+
   const anyDragging = draggingIndex !== null;
 
   return (
@@ -247,7 +278,7 @@ export function QueueSheet({
       <View style={styles.headerRow}>
         <View style={styles.headerTitleBox}>
           <Text style={styles.title}>Up Next Queue ({queue.length})</Text>
-          <Text style={styles.hint}>Drag ::: to reorder</Text>
+          <Text style={styles.hint}>Drag ::: or tap ▲ ▼ to reorder</Text>
         </View>
         {queue.length > 0 && (
           <TouchableOpacity
@@ -279,6 +310,8 @@ export function QueueSheet({
             onStartDrag={handleStartDrag}
             onMoveDrag={handleMoveDrag}
             onEndDrag={handleEndDrag}
+            onMoveUp={handleMoveUp}
+            onMoveDown={handleMoveDown}
             onSelectTrack={onSelectTrack}
             onRemoveTrack={onRemoveTrack}
           />
@@ -345,10 +378,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  rowDefault: {
-    zIndex: 1,
-    elevation: 1,
-  },
   rowActive: {
     borderColor: COLORS.primary,
   },
@@ -363,23 +392,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   dragHandle: {
-    width: 44,
+    width: 32,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
   },
   dragHandleIcon: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.textMuted,
   },
   dragHandleIconDragging: {
-    color: '#38BDF8',
+    color: COLORS.primary,
   },
   trackInfo: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 6,
   },
   trackTitle: {
     fontSize: 13,
@@ -391,10 +420,36 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
   },
+  reorderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    gap: 4,
+  },
+  reorderBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reorderBtnDisabled: {
+    opacity: 0.2,
+    backgroundColor: 'transparent',
+  },
+  reorderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  reorderBtnTextDisabled: {
+    color: COLORS.textMuted,
+  },
   removeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: 'rgba(244, 63, 94, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
