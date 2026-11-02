@@ -47,7 +47,12 @@ export function RadioCatalogPage(): React.JSX.Element {
         />
       )}
 
-      <StreamRecoveryBanner />
+      <StreamRecoveryBanner
+        style={[
+          styles.recoveryOverlayBanner,
+          Boolean(playbackError) && styles.recoveryOverlayWithOffset,
+        ]}
+      />
       <StationFiltersBar />
       <StationList
         stations={stations}
@@ -109,5 +114,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 10,
+  },
+  recoveryOverlayBanner: {
+    position: 'absolute',
+    top: 66,
+    left: 16,
+    right: 16,
+    zIndex: 998,
+    paddingHorizontal: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  recoveryOverlayWithOffset: {
+    top: 135,
   },
 });

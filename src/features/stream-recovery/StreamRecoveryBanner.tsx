@@ -1,9 +1,15 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { Banner } from '@shared/ui';
 import { useStreamRecoveryBanner } from './model';
 
-export function StreamRecoveryBanner(): React.JSX.Element | null {
+export interface StreamRecoveryBannerProps {
+  style?: StyleProp<ViewStyle>;
+}
+
+export function StreamRecoveryBanner({
+  style,
+}: StreamRecoveryBannerProps = {}): React.JSX.Element | null {
   const {
     visible,
     showReconnectBanner,
@@ -19,7 +25,7 @@ export function StreamRecoveryBanner(): React.JSX.Element | null {
   }
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, style]}>
       {showReconnectBanner && (
         <Banner
           title={recoveryTitle}

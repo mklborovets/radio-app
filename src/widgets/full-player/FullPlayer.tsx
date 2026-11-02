@@ -82,6 +82,13 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
         />
       )}
 
+      <StreamRecoveryBanner
+        style={[
+          styles.recoveryOverlayCard,
+          Boolean(playbackError) && styles.recoveryOverlayWithOffset,
+        ]}
+      />
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -191,7 +198,6 @@ export function FullPlayer({ onClose }: FullPlayerProps): React.JSX.Element {
               </View>
             )}
 
-            <StreamRecoveryBanner />
             <PlaybackControlsPanel isRadioStream={isRadio} />
 
             <View style={styles.volumeRow}>
@@ -308,6 +314,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 10,
+  },
+  recoveryOverlayCard: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    right: 16,
+    zIndex: 98,
+    paddingHorizontal: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  recoveryOverlayWithOffset: {
+    top: 130,
   },
   body: {
     alignItems: 'center',

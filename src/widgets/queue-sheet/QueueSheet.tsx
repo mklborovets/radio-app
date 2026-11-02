@@ -51,7 +51,7 @@ function QueueRowItem({
   onSelectTrack,
   onRemoveTrack,
 }: QueueRowItemProps): React.JSX.Element {
-  const { currentTranslateY, panHandlers, sourceLabel } = useQueueRowItem({
+  const { currentTranslateY, panHandlers, isUserQueued } = useQueueRowItem({
     item,
     index,
     isDragging,
@@ -91,12 +91,29 @@ function QueueRowItem({
         onPress={() => onSelectTrack(item)}
         activeOpacity={0.8}
         disabled={anyDragging}>
-        <Text style={styles.trackTitle} numberOfLines={1}>
-          {index + 1}. {item.title}
-        </Text>
-        <Text style={styles.trackSubtitle} numberOfLines={1}>
-          {sourceLabel} • {item.subtitle}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.trackTitle} numberOfLines={1}>
+            {index + 1}. {item.title}
+          </Text>
+        </View>
+        <View style={styles.metaRow}>
+          <View
+            style={[
+              styles.sourceBadge,
+              isUserQueued ? styles.badgeUser : styles.badgeContext,
+            ]}>
+            <Text
+              style={[
+                styles.sourceBadgeText,
+                isUserQueued ? styles.badgeUserText : styles.badgeContextText,
+              ]}>
+              {isUserQueued ? 'UP NEXT' : 'AUTOPLAY'}
+            </Text>
+          </View>
+          <Text style={styles.trackSubtitle} numberOfLines={1}>
+            {item.sourceType === 'radio' ? 'Radio' : 'Podcast'} • {item.subtitle}
+          </Text>
+        </View>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -116,6 +133,8 @@ export function QueueSheet({
 }: QueueSheetProps = {}): React.JSX.Element {
   const {
     queue,
+    manualCount,
+    contextCount,
     activeTrackId,
     draggingIndex,
     hoverIndex,
@@ -133,8 +152,12 @@ export function QueueSheet({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerTitleBox}>
-          <Text style={styles.title}>Up Next Queue ({queue.length})</Text>
-          <Text style={styles.hint}>Drag ::: to reorder</Text>
+          <Text style={styles.title}>Playback Queue ({queue.length})</Text>
+          <Text style={styles.hint}>
+            {manualCount > 0
+              ? `${manualCount} in Up Next • ${contextCount} in Autoplay`
+              : `${contextCount} in Autoplay • Drag ::: to reorder`}
+          </Text>
         </View>
         {queue.length > 0 && (
           <TouchableOpacity
@@ -263,6 +286,42 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  sourceBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  badgeUser: {
+    backgroundColor: 'rgba(56, 189, 248, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+  },
+  badgeContext: {
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.25)',
+  },
+  sourceBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  badgeUserText: {
+    color: COLORS.primary,
+  },
+  badgeContextText: {
+    color: COLORS.textMuted,
+  },
   trackTitle: {
     fontSize: 13,
     fontWeight: '600',
@@ -271,7 +330,7 @@ const styles = StyleSheet.create({
   trackSubtitle: {
     fontSize: 11,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    flex: 1,
   },
   removeBtn: {
     width: 30,

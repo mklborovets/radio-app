@@ -1,6 +1,5 @@
 import TrackPlayer, {
   Event,
-  PlaybackActiveTrackChangedEvent,
   PlaybackErrorEvent,
   PlaybackProgressUpdatedEvent,
   PlaybackState,
@@ -37,6 +36,27 @@ async function flushCurrentEpisodeIfApplicable(): Promise<void> {
     store.positionSeconds,
     store.durationSeconds || active.duration,
   );
+}
+
+let isTransitioningToNextTrack = false;
+
+async function handleTrackEnded(): Promise<void> {
+  if (isTransitioningToNextTrack) {
+    return;
+  }
+  isTransitioningToNextTrack = true;
+  clearStreamWatchdog();
+  const store = usePlayerStore.getState();
+  store.setIsPlaying(false);
+  store.setIsBuffering(false);
+  try {
+    await flushCurrentEpisodeIfApplicable();
+    await skipToNextInQueue();
+  } finally {
+    setTimeout(() => {
+      isTransitioningToNextTrack = false;
+    }, 1000);
+  }
 }
 
 export async function playbackService(): Promise<void> {
@@ -144,14 +164,13 @@ export async function playbackService(): Promise<void> {
           store.setIsBuffering(false);
           await TrackPlayer.play().catch(() => {});
         }
-      } else if (
-        playbackState.state === State.Paused ||
-        playbackState.state === State.Ended
-      ) {
+      } else if (playbackState.state === State.Paused) {
         clearStreamWatchdog();
         store.setIsPlaying(false);
         store.setIsBuffering(false);
         await flushCurrentEpisodeIfApplicable();
+      } else if (playbackState.state === State.Ended) {
+        await handleTrackEnded();
       } else if (
         playbackState.state === State.Stopped ||
         playbackState.state === State.None
@@ -167,8 +186,7 @@ export async function playbackService(): Promise<void> {
   );
 
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
-    await flushCurrentEpisodeIfApplicable();
-    await skipToNextInQueue();
+    await handleTrackEnded();
   });
 
   TrackPlayer.addEventListener(
@@ -192,21 +210,20 @@ export async function playbackService(): Promise<void> {
           event.position,
           event.duration || active.duration,
         );
+
+        if (
+          event.duration > 0 &&
+          event.position >= event.duration - 0.5 &&
+          !isTransitioningToNextTrack
+        ) {
+          await handleTrackEnded();
+        }
       }
     },
   );
 
   TrackPlayer.addEventListener(
     Event.PlaybackActiveTrackChanged,
-    async (event: PlaybackActiveTrackChangedEvent) => {
-      if (!event.track || !event.track.id) {
-        return;
-      }
-      const store = usePlayerStore.getState();
-      const matched = store.queue.find((item) => item.id === event.track?.id);
-      if (matched && store.activeTrack?.id !== matched.id) {
-        store.setActiveTrack(matched);
-      }
-    },
+    async () => {},
   );
 }
